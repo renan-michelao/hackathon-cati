@@ -30,6 +30,8 @@ export class Client {
   name = '';
   socket: Socket | null = null;
   events: { event: string; data: any }[] = [];
+  /** salas em que o cliente está e o modo escolhido (para reentrar ao reconectar) */
+  rooms = new Map<string, 'participant' | 'spectator'>();
 
   async req(method: string, path: string, body?: unknown, form?: FormData) {
     const r = await fetch(BASE + path, {
@@ -40,7 +42,10 @@ export class Client {
     const set = r.headers.get('set-cookie');
     if (set) this.cookie = set.split(';')[0];
     const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
+    // com a API fora do ar, o Nginx responde 502 em HTML: devolve o texto em vez de quebrar
+    let parsed: any = null;
+    try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+    return { status: r.status, body: parsed };
   }
 
   async register(name: string) {
@@ -60,6 +65,13 @@ export class Client {
     if (this.socket?.connected) return this.socket;
     const s = io(BASE, { path: '/socket.io', transports: ['websocket'], extraHeaders: { cookie: this.cookie }, forceNew: true });
     s.onAny((event, data) => this.events.push({ event, data }));
+    s.on('disconnect', () => this.events.push({ event: 'disconnect', data: null }));
+    // Como a página da sala faz (RF24/RF25): ao reconectar, entra de novo em cada sala no mesmo modo
+    s.io.on('reconnect', () => {
+      for (const [auctionId, mode] of this.rooms) {
+        s.emit('room:join', { auctionId, mode }, (ack: any) => this.events.push({ event: 'rejoin', data: { auctionId, ...ack } }));
+      }
+    });
     await new Promise<void>((resolve, reject) => {
       s.once('connect', () => resolve());
       s.once('connect_error', (e) => reject(e));
@@ -70,11 +82,15 @@ export class Client {
 
   async join(auctionId: string, mode: 'participant' | 'spectator' = 'participant'): Promise<any> {
     const s = await this.connect();
-    return s.emitWithAck('room:join', { auctionId, mode });
+    const ack = await s.emitWithAck('room:join', { auctionId, mode });
+    if (ack?.ok) this.rooms.set(auctionId, ack.mode ?? mode);
+    return ack;
   }
 
   async setMode(auctionId: string, mode: 'participant' | 'spectator'): Promise<any> {
-    return this.socket!.emitWithAck('room:mode', { auctionId, mode });
+    const ack = await this.socket!.emitWithAck('room:mode', { auctionId, mode });
+    if (ack?.ok) this.rooms.set(auctionId, ack.mode ?? mode);
+    return ack;
   }
 
   /** Espera até `ms` por um evento recebido que satisfaça `pred`. */
