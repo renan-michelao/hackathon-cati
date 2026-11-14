@@ -25,10 +25,58 @@ export interface AuctionSummary {
   seller: { id: string; displayName: string };
 }
 
+export type EditPolicy = 'ALL' | 'APPEND_DESCRIPTION' | 'NONE';
+
 export interface AuctionDetail extends AuctionSummary {
   description: string;
   photos: string[];
+  editPolicy: EditPolicy;
+  canCancel: boolean;
+  canRelist: boolean;
   serverNow: string;
+}
+
+export type RoomMode = 'participant' | 'spectator';
+
+export interface Presence {
+  auctionId: string;
+  participants: number;
+  spectators: number;
+}
+
+export interface PublicProfile {
+  id: string;
+  displayName: string;
+  createdAt: string;
+  auctions: { scheduled: AuctionSummary[]; live: AuctionSummary[]; past: AuctionSummary[] };
+}
+
+export interface SellerHit {
+  id: string;
+  displayName: string;
+  createdAt: string;
+  auctionCount: number;
+}
+
+export interface Participation {
+  auctionId: string;
+  name: string;
+  category: string;
+  status: AuctionStatus;
+  coverUrl: string | null;
+  myBestCents: number;
+  myBidCount: number;
+  currentPriceCents: number | null;
+  minNextCents: number;
+  endsAt: string;
+  situation: 'leader' | 'outbid' | 'winner';
+}
+
+export interface OutbidEvent {
+  auctionId: string;
+  name: string | null;
+  amountCents: number;
+  minNextCents: number;
 }
 
 export interface RoomBid {
@@ -41,6 +89,8 @@ export interface RoomBid {
 
 export interface RoomState {
   id: string;
+  name: string;
+  description: string;
   status: AuctionStatus;
   startPriceCents: number;
   currentPriceCents: number | null;
@@ -103,3 +153,5 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const post = <T>(path: string, data?: unknown) =>
   api<T>(path, { method: 'POST', body: data instanceof FormData ? data : data ? JSON.stringify(data) : undefined });
+
+export const patch = <T>(path: string, data: FormData) => api<T>(path, { method: 'PATCH', body: data });
