@@ -8,6 +8,8 @@ interface AuthCtx {
   register: (displayName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Atualiza o usuário logado depois de alterar apelido ou foto (o cabeçalho muda na hora). */
+  setCurrentUser: (u: User) => void;
 }
 
 const Ctx = createContext<AuthCtx>(null!);
@@ -44,7 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  return <Ctx.Provider value={{ user, loading, login, register, logout, refresh }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ user, loading, login, register, logout, refresh, setCurrentUser: setUser }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export const useAuth = () => useContext(Ctx);
