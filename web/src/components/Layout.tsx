@@ -8,7 +8,7 @@ export function Layout() {
   const loc = useLocation();
   const [showSellerModal, setShowSellerModal] = useState(false);
 
-  // Nas páginas de login e cadastro, delega o layout limpo para a página
+  // Nas páginas de login e cadastro, delega o layout para a página correspondente
   const isAuthPage = loc.pathname === '/entrar' || loc.pathname === '/cadastro';
   if (isAuthPage) {
     return <Outlet />;
@@ -60,8 +60,8 @@ export function Layout() {
           <div className="flex items-center gap-3">
             {user ? (
               <div className="flex items-center gap-3">
-                <Link to="/perfil" className="flex items-center gap-2.5 text-left group">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 font-bold text-white text-sm shadow-inner ring-2 ring-white">
+                <Link to={`/usuarios/${user.id}`} className="flex items-center gap-2.5 text-left group">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 font-bold text-white text-sm shadow-inner ring-2 ring-white">
                     {user.displayName.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="hidden text-xs sm:block">
