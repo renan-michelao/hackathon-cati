@@ -12,6 +12,9 @@ ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
+# pasta das fotos (D29); o volume "fotos" do compose herda este dono na primeira montagem
+RUN mkdir -p /data/fotos && chown -R node:node /data
+ENV PHOTOS_DIR=/data
 USER node
 EXPOSE 3000
 CMD ["node", "dist/server.js"]

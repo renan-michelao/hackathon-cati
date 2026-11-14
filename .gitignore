@@ -11,3 +11,6 @@ hackaton
 *.pem
 id_*
 *.save
+
+# fotos gravadas no modo de desenvolvimento sem Docker
+api/data/

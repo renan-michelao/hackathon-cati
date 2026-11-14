@@ -29,6 +29,9 @@ services:
       timeout: 3s
       retries: 20
       start_period: 10s
+    volumes:
+      # D29: fotos no disco da VM, num volume que sobrevive a rebuilds e reinícios
+      - fotos:/data/fotos
 
   worker:
     build: ./api
@@ -48,18 +51,6 @@ services:
       api:
         condition: service_healthy
 
-  # Só para rodar na máquina de desenvolvimento: armazenamento S3 local.
-  # Na VM NÃO use este perfil (RF07: fotos não podem ficar no disco da VM).
-  # Ative com: docker compose --profile local up -d --build
-  s3-local:
-    image: chrislusf/seaweedfs:latest
-    profiles: ["local"]
-    restart: unless-stopped
-    # volumes de 100 MB: o padrão (30 GB por volume) falha em discos com pouco espaço livre
-    command: ["server", "-s3", "-ip.bind=0.0.0.0", "-dir=/data", "-master.volumeSizeLimitMB=100", "-volume.max=20"]
-    volumes:
-      - s3data:/data
-
 volumes:
   pgdata:
-  s3data:
+  fotos:
