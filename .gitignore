@@ -14,3 +14,6 @@ id_*
 
 # fotos gravadas no modo de desenvolvimento sem Docker
 api/data/
+
+# gerado pelo TypeScript (build incremental)
+*.tsbuildinfo
