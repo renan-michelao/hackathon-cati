@@ -30,9 +30,10 @@ docker compose down -v            # para tudo e APAGA banco e fotos locais
 ```
 
 ### Opção B: na VM do hackathon
-Igual à opção A, mas **sem** o perfil `local` (o RF07 proíbe fotos no disco da VM):
+Igual à opção A, mas **sem** o perfil `local` (o RF07 proíbe fotos no disco da VM).
+A chave privada fica em `~/.ssh/hackathon` com permissão `600`, **nunca** dentro do repositório (o `.gitignore` bloqueia).
 ```bash
-ssh -i ~/.ssh/hackaton -p 8023 ubuntu@200.18.99.113
+ssh -i ~/.ssh/hackathon -p 8023 ubuntu@200.18.99.113
 git clone https://github.com/renan-michelao/hackathon-cati.git && cd hackathon-cati
 cp .env.example .env          # senha do banco + credenciais S3_* da organização
 docker compose up -d --build
@@ -210,3 +211,27 @@ As categorias são uma lista fixa de 10: Eletrônicos, Informática, Casa e Deco
 **Escolha:** um único `docker-compose.yml`. O armazenamento S3 local (`s3-local`) só sobe com `--profile local`. Há dois modelos de configuração: `.env.local.example` (máquina de desenvolvimento) e `.env.example` (VM, com as credenciais da organização).
 **Por quê:** o que testamos localmente é o mesmo arquivo que roda na VM, então descobrimos problemas de build e rede antes de publicar. O perfil impede, por padrão, que a VM suba um armazenamento no próprio disco e viole o RF07.
 **Custo:** é preciso lembrar de **não** usar `--profile local` na VM. Isso está registrado no README e no `.env.example`.
+
+## D28 · Preparação da VM (1 vCPU, 961 MB de RAM)
+**Requisito:** RNF01
+**Situação:** Ubuntu 24.04, 1 vCPU, 961 MB de RAM e 19 GB de disco. O usuário `ubuntu` tem `sudo` sem senha.
+**Escolha:**
+- **Swap de 2 GB** (`/swapfile`, persistente no `/etc/fstab`). Compilar o front e a API com `npm` pode passar de 1 GB de RAM; sem swap, o kernel mataria o build.
+- **Docker dos pacotes do Ubuntu** (`docker.io` e `docker-compose-v2`). Vêm do repositório oficial da distribuição, sem precisar adicionar um repositório de terceiros nem rodar script baixado da internet como root.
+- **Build na própria VM** (`docker compose up -d --build`). Prova o RNF03: o ambiente se recria do zero só com o repositório e o `.env`.
+- **`.env` da VM criado lá mesmo**, com senha do banco aleatória (`openssl rand -hex 16`) e permissão `600`. A senha nunca passa pelo Git nem pelo chat.
+**Custo:** o primeiro build é lento (1 CPU). Os seguintes reaproveitam o cache do Docker.
+**Memória em uso:** Postgres, API, worker e Nginx juntos cabem com folga em ~1 GB; o swap é só a margem de segurança.
+
+## ⚠️ Pendência P01 · Armazenamento de fotos na VM
+**Situação atual (provisória):** a VM está rodando com `--profile local`, então as fotos ficam no SeaweedFS **dentro da VM**. Isso **viola o RF07**.
+**Por quê:** a organização ainda não enviou as credenciais do armazenamento em nuvem, e a dica do edital é publicar cedo para achar problemas de rede e permissão.
+**Para resolver quando as credenciais chegarem:**
+```bash
+# na VM, em ~/hackathon-cati: editar .env com S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY da organização
+docker compose --profile local down -v       # derruba tudo e APAGA banco e fotos locais
+docker compose up -d                         # sobe SEM o perfil local
+docker compose exec api node dist/seed.js    # recria os dados de demonstração com fotos na nuvem
+```
+O `-v` é necessário: os leilões já criados apontam para fotos que só existem no armazenamento local.
+Se o serviço da organização não for compatível com S3, só `api/src/storage.ts` muda.
