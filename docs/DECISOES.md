@@ -5,6 +5,59 @@ As mais importantes vão para o README (seção 8 do edital) e para o pitch.
 
 ---
 
+## Como rodar o projeto
+
+### Pré-requisito: Docker
+- **Fedora:** `bash scripts/instalar-docker-fedora.sh`. O script instala o Docker Engine e o Compose do repositório oficial, liga o serviço no boot e coloca o usuário no grupo `docker`. Depois, faça logout e login (ou rode `newgrp docker`) para usar `docker` sem `sudo`.
+- **Ubuntu (VM):** `curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker $USER`
+
+### Opção A: tudo em Docker na sua máquina (perfil `local`)
+Sobe banco, API, worker, front e um armazenamento S3 local.
+```bash
+cp .env.local.example .env
+docker compose --profile local up -d --build
+docker compose exec api node dist/seed.js      # contas e leilões de demonstração
+```
+Abra **http://localhost:8080** e entre com `bruno@demo.com` / `demo1234`. As outras contas estão no README.
+
+Comandos do dia a dia:
+```bash
+docker compose ps                 # o que está rodando
+docker compose logs -f api worker # logs ao vivo
+docker compose restart worker     # reinicia só o worker (teste do RF18)
+docker compose down               # para tudo (os dados continuam no volume)
+docker compose down -v            # para tudo e APAGA banco e fotos locais
+```
+
+### Opção B: na VM do hackathon
+Igual à opção A, mas **sem** o perfil `local` (o RF07 proíbe fotos no disco da VM):
+```bash
+ssh -i ~/.ssh/hackaton -p 8023 ubuntu@200.18.99.113
+git clone https://github.com/renan-michelao/hackathon-cati.git && cd hackathon-cati
+cp .env.example .env          # senha do banco + credenciais S3_* da organização
+docker compose up -d --build
+docker compose exec api node dist/seed.js
+```
+Fica público em **http://200.18.99.113:8083**: a organização repassa a porta 8083 para a 8080 da VM.
+
+### Opção C: desenvolvimento com recarga automática (sem Docker para o código)
+Melhor para programar: cada alteração aparece na hora.
+```bash
+podman start kp-db kp-s3      # ou: docker compose --profile local up -d db s3-local (veja a nota abaixo)
+cd api && npm install && npm run dev            # API :3000 (variáveis no README)
+cd api && npm run dev:worker                    # worker
+cd web && npm install && npm run dev            # front :5173
+```
+Nota: no compose, `db` e `s3-local` não publicam portas no computador; por isso a opção C usa os contêineres `kp-db` (porta 5433) e `kp-s3` (porta 9000) do README.
+
+### Conferir as garantias
+```bash
+cd api && BASE_URL=http://localhost:8080 npx tsx scripts/verificar.ts   # contra o Docker (opção A)
+cd api && BASE_URL=http://localhost:3000 npx tsx scripts/verificar.ts   # contra a opção C
+```
+
+---
+
 ## D01 · Arquitetura na VM
 **Requisitos:** RNF01, RNF03, Bônus 7.2
 **Escolha:** Docker Compose com 4 serviços: `web` (Nginx na porta 8080 servindo o React e repassando `/api` e `/socket.io`), `api` (Node.js), `worker` (Node.js, mesmo código, outro processo) e `db` (PostgreSQL).
@@ -146,3 +199,9 @@ As categorias são uma lista fixa de 10: Eletrônicos, Informática, Casa e Deco
 ## D22 · Armazenamento local para desenvolvimento
 **Escolha:** em desenvolvimento usamos SeaweedFS (compatível com S3) num contêiner. As imagens oficiais do MinIO deixaram de ser distribuídas publicamente.
 **Observação:** na VM **não** usamos armazenamento local, porque o RF07 proíbe fotos no disco da VM. Lá usamos o serviço de nuvem da organização.
+
+## D27 · O mesmo docker compose para a máquina local e para a VM
+**Requisitos:** RNF03, RF07
+**Escolha:** um único `docker-compose.yml`. O armazenamento S3 local (`s3-local`) só sobe com `--profile local`. Há dois modelos de configuração: `.env.local.example` (máquina de desenvolvimento) e `.env.example` (VM, com as credenciais da organização).
+**Por quê:** o que testamos localmente é o mesmo arquivo que roda na VM, então descobrimos problemas de build e rede antes de publicar. O perfil impede, por padrão, que a VM suba um armazenamento no próprio disco e viole o RF07.
+**Custo:** é preciso lembrar de **não** usar `--profile local` na VM. Isso está registrado no README e no `.env.example`.
