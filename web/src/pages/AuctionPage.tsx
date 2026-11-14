@@ -203,7 +203,7 @@ function ModeBar({ mode, presence, isSeller, switching, open, live, onChange }: 
       <div className="flex items-start justify-between gap-3 rounded-xl border-2 border-emerald-400 bg-emerald-50 px-4 py-3" role="status">
         <div>
           <div className="font-semibold text-emerald-800">🙋 Você está participando</div>
-          <div className="text-xs text-emerald-700">Pode dar lances nesta sala.</div>
+          <div className="text-xs text-emerald-700">{live ? 'Pode dar lances nesta sala.' : 'Poderá dar lances quando o leilão abrir.'}</div>
           {counts}
         </div>
         {open && (
@@ -255,7 +255,7 @@ function RoomPanel({ room, me, isSeller, mode, switching, onChange }: {
           </div>
         )}
         {room.status === 'SOLD' && (
-          <div className="rounded-lg bg-brand-50 p-4 text-center">
+          <div className="rounded-xl bg-brand-50 p-4 text-center">
             <div className="text-sm font-semibold text-brand-700">VENDIDO</div>
             <div className="text-2xl font-bold">{money(room.finalPriceCents)}</div>
             <div className="text-sm text-slate-600">
@@ -263,8 +263,8 @@ function RoomPanel({ room, me, isSeller, mode, switching, onChange }: {
             </div>
           </div>
         )}
-        {room.status === 'ENDED_NO_BIDS' && <div className="rounded-lg bg-slate-100 p-4 text-center font-semibold">Encerrado sem lances</div>}
-        {room.status === 'CANCELLED' && <div className="rounded-lg bg-red-50 p-4 text-center font-semibold text-red-700">Leilão cancelado</div>}
+        {room.status === 'ENDED_NO_BIDS' && <div className="rounded-xl bg-slate-100 p-4 text-center font-semibold">Encerrado sem lances</div>}
+        {room.status === 'CANCELLED' && <div className="rounded-xl bg-red-50 p-4 text-center font-semibold text-red-700">Leilão cancelado</div>}
 
         <div className="grid grid-cols-2 gap-3 text-center">
           <div className={tile}>
@@ -278,8 +278,8 @@ function RoomPanel({ room, me, isSeller, mode, switching, onChange }: {
             </div>
           ) : (
             <div className={tile}>
-              <div className="text-xs text-slate-500">Preço inicial</div>
-              <div className="text-xl font-bold">{money(room.startPriceCents)}</div>
+              <div className="text-xs text-slate-500">Terminou</div>
+              <div className="text-sm font-bold">{dateTime(room.endsAt)}</div>
             </div>
           )}
           <div className={tile}>
