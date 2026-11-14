@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { Avatar } from './Avatar';
+import { GavelIcon } from './GavelIcon';
 
 const AUTH_PAGES = ['/entrar', '/cadastro', '/esqueci-senha', '/redefinir-senha'];
 
@@ -26,7 +27,7 @@ export function Layout() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5">
           {/* Logo & Marca */}
           <Link to="/" className="flex items-center gap-2 text-lg font-bold text-slate-900 hover:opacity-90">
-            <span className="text-xl">🔨</span>
+            <GavelIcon className="h-6 w-6 text-slate-900" />
             <span className="tracking-tight">FGR Leilões</span>
           </Link>
 
