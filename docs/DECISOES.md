@@ -50,6 +50,11 @@ cd web && npm install && npm run dev            # front :5173
 ```
 Nota: no compose, `db` e `s3-local` não publicam portas no computador; por isso a opção C usa os contêineres `kp-db` (porta 5433) e `kp-s3` (porta 9000) do README.
 
+### Problemas conhecidos (e já resolvidos)
+- **`permission denied` ao rodar `docker`:** faltou entrar no grupo `docker` depois da instalação. Faça logout e login, rode `newgrp docker` ou use `sg docker -c "docker compose ..."`.
+- **API "unhealthy" no compose:** no Alpine, `localhost` resolve para IPv6 (`::1`) e a API escuta em IPv4. O teste de saúde usa `127.0.0.1`.
+- **Upload de fotos falha no `s3-local` com "No writable volumes":** o SeaweedFS reserva volumes de 30 GB por padrão. No compose, limitamos a 100 MB (`-master.volumeSizeLimitMB=100`).
+
 ### Conferir as garantias
 ```bash
 cd api && BASE_URL=http://localhost:8080 npx tsx scripts/verificar.ts   # contra o Docker (opção A)
