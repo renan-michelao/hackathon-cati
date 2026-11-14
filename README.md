@@ -1,6 +1,6 @@
 # Kernel Panic Leilões
 
-Plataforma de leilão online em tempo real, feita pela equipe **Kernel Panic** (Renan, Gustavo e Francine) no Hackathon Cati Jr.
+Plataforma de leilão online em tempo real, feita pela equipe **Kernel Panic** (Renan, Gustavo e Francini) no Hackathon Cati Jr.
 
 **Sistema publicado:** http://200.18.99.113:8083
 
