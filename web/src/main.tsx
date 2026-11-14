@@ -12,6 +12,7 @@ import { NewAuction } from './pages/NewAuction';
 import { AuctionPage } from './pages/AuctionPage';
 import { EditAuction, RelistAuction } from './pages/ManageAuction';
 import { ParticipationsPage, ProfilePage, SellersPage } from './pages/People';
+import { EditProfilePage } from './pages/EditProfile';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -37,7 +38,9 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="leiloes/:id/editar" element={<RequireAuth><EditAuction /></RequireAuth>} />
                 <Route path="leiloes/:id/relistar" element={<RequireAuth><RelistAuction /></RequireAuth>} />
                 <Route path="comitentes" element={<SellersPage />} />
+                <Route path="perfil" element={<RequireAuth><EditProfilePage /></RequireAuth>} />
                 <Route path="usuarios/:id" element={<ProfilePage />} />
+                <Route path="usuarios/:id/editar" element={<RequireAuth><EditProfilePage /></RequireAuth>} />
                 <Route path="minhas-participacoes" element={<RequireAuth><ParticipationsPage /></RequireAuth>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

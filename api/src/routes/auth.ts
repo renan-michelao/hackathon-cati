@@ -16,6 +16,12 @@ const loginBody = z.object({
   password: z.string(),
 });
 
+const updateProfileBody = z.object({
+  displayName: z.string().trim().min(2, 'Nome muito curto').max(60, 'Nome muito longo').optional(),
+  email: z.string().trim().toLowerCase().email('E-mail inválido').max(200).optional(),
+  password: z.string().min(8, 'A senha precisa ter ao menos 8 caracteres').max(200).optional(),
+});
+
 export async function authRoutes(app: FastifyInstance) {
   // RF01: cadastro (já entra logado)
   app.post('/api/auth/register', async (req, reply) => {
@@ -59,4 +65,47 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/auth/me', { preHandler: requireUser }, async (req) => ({ user: req.user }));
+
+  // Atualização de dados da conta (Perfil)
+  app.patch('/api/auth/me', { preHandler: requireUser }, async (req, reply) => {
+    const body = updateProfileBody.parse(req.body);
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (body.displayName) {
+      params.push(body.displayName);
+      sets.push(`display_name = $${params.length}`);
+    }
+    if (body.email) {
+      params.push(body.email);
+      sets.push(`email = $${params.length}`);
+    }
+    if (body.password) {
+      const hash = await hashPassword(body.password);
+      params.push(hash);
+      sets.push(`password_hash = $${params.length}`);
+    }
+
+    if (sets.length === 0) {
+      return { user: req.user };
+    }
+
+    params.push(req.user!.id);
+    try {
+      const { rows } = await pool.query(
+        `UPDATE users SET ${sets.join(', ')} WHERE id = $${params.length}
+         RETURNING id, display_name, email, created_at`,
+        params,
+      );
+      const u = rows[0];
+      return {
+        user: { id: u.id, displayName: u.display_name, email: u.email, createdAt: u.created_at.toISOString() },
+      };
+    } catch (e: any) {
+      if (e?.code === '23505') {
+        return reply.code(409).send({ error: 'EMAIL_TAKEN', message: 'Este e-mail já está em uso.' });
+      }
+      throw e;
+    }
+  });
 }
