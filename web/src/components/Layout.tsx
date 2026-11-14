@@ -8,7 +8,7 @@ export function Layout() {
   const loc = useLocation();
   const [showSellerModal, setShowSellerModal] = useState(false);
 
-  // Nas páginas de login e cadastro, exibe o layout limpo e dedicado
+  // Nas páginas de login e cadastro, delega o layout para a página correspondente
   const isAuthPage = loc.pathname === '/entrar' || loc.pathname === '/cadastro';
   if (isAuthPage) {
     return <Outlet />;

@@ -36,7 +36,6 @@ export function Home() {
     cancelados: false,
   });
 
-  // Carrega configurações gerais e relógio
   useEffect(() => {
     api<AppConfig>('/api/config').then((c) => {
       setCfg(c);
@@ -44,7 +43,6 @@ export function Home() {
     });
   }, []);
 
-  // Busca os leilões com os parâmetros ativos
   const load = useCallback(async () => {
     const params = new URLSearchParams({ status, page: String(page) });
     if (q.trim()) params.set('q', q.trim());
@@ -52,7 +50,6 @@ export function Home() {
 
     const r = await api<Paged<AuctionSummary>>(`/api/auctions?${params}`);
 
-    // Se houver busca por comitente no filtro avançado, filtra por seller.displayName
     if (sellerSearch.trim() && r?.items) {
       const term = sellerSearch.trim().toLowerCase();
       r.items = r.items.filter((item) =>
@@ -68,7 +65,6 @@ export function Home() {
     return () => clearTimeout(t);
   }, [load]);
 
-  // Atualização em tempo real (RF20 / Socket.IO)
   useEffect(() => {
     if (!socket) {
       const t = setInterval(() => void load(), 10_000);
@@ -89,7 +85,6 @@ export function Home() {
     };
   }, [socket, load]);
 
-  // Atualiza o status conforme os checkboxes do filtro avançado
   const handleCheckboxChange = (key: keyof typeof checkedStates) => {
     const next = { ...checkedStates, [key]: !checkedStates[key] };
     setCheckedStates(next);
@@ -104,7 +99,6 @@ export function Home() {
     setPage(1);
   };
 
-  // Abas de filtro rápido (Pills)
   const tabs: StatusFilter[] = [
     { id: 'ativos', label: 'Ativos', value: 'LIVE,SCHEDULED', count: 12 },
     { id: 'andamento', label: 'Em andamento', value: 'LIVE' },
@@ -127,7 +121,6 @@ export function Home() {
     setStatus(tab.value);
     setPage(1);
 
-    // Sincroniza os checkboxes do filtro avançado
     setCheckedStates({
       agendado: tab.value.includes('SCHEDULED'),
       emAndamento: tab.value.includes('LIVE'),
@@ -140,7 +133,7 @@ export function Home() {
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho da Página: Título, Descrição, Busca e Botão de Filtros */}
+      {/* Cabeçalho da Página */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
@@ -211,7 +204,7 @@ export function Home() {
         })}
       </div>
 
-      {/* Layout Principal: Grid de Cards + Painel Lateral de Filtros Avançados */}
+      {/* Layout Principal: Grid de Cards + Painel Lateral */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* Coluna dos Cards */}
         <div className="flex-1 w-full space-y-6">
