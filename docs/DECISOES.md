@@ -33,12 +33,12 @@ docker compose down -v            # para tudo e APAGA banco e fotos
 Os mesmos comandos da opção A. A chave privada fica em `~/.ssh/hackathon` com permissão `600`, **nunca** dentro do repositório (o `.gitignore` bloqueia).
 ```bash
 ssh -i ~/.ssh/hackathon -p 8023 ubuntu@200.18.99.113
-git clone -b feat/estrutura-base https://github.com/renan-michelao/hackathon-cati.git && cd hackathon-cati
+git clone https://github.com/renan-michelao/hackathon-cati.git && cd hackathon-cati
 cp .env.example .env          # troque a senha do banco: openssl rand -hex 16
 docker compose up -d --build
 docker compose exec api node dist/seed.js
 ```
-Para atualizar depois de novos commits: `cd ~/hackathon-cati && git pull && docker compose up -d --build`.
+Para atualizar depois de novos commits: `cd ~/hackathon-cati && git switch main && git pull && docker compose up -d --build` (a VM ainda está na branch `feat/estrutura-base` do primeiro deploy).
 Fica público em **http://200.18.99.113:8083**: a organização repassa a porta 8083 para a 8080 da VM.
 
 ### Opção C: desenvolvimento com recarga automática (sem Docker para o código)
