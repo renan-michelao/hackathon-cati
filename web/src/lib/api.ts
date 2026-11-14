@@ -7,6 +7,7 @@ export interface User {
   displayName: string;
   email: string;
   createdAt: string;
+  avatarUrl: string | null;
 }
 
 export interface AuctionSummary {
@@ -48,6 +49,7 @@ export interface PublicProfile {
   id: string;
   displayName: string;
   createdAt: string;
+  avatarUrl: string | null;
   auctions: { scheduled: AuctionSummary[]; live: AuctionSummary[]; past: AuctionSummary[] };
 }
 
@@ -55,6 +57,7 @@ export interface SellerHit {
   id: string;
   displayName: string;
   createdAt: string;
+  avatarUrl: string | null;
   auctionCount: number;
 }
 

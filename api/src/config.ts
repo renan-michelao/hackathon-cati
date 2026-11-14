@@ -21,6 +21,9 @@ export const config = {
 
   // RF02: sessão expira após SESSION_TTL_MIN minutos sem uso e se renova a cada requisição.
   sessionTtlMin: num('SESSION_TTL_MIN', 120),
+  // Esqueci minha senha: validade do link e endereço do site usado no link do e-mail
+  passwordResetTtlMin: num('PASSWORD_RESET_TTL_MIN', 30),
+  appUrl: str('APP_URL', 'http://localhost:8080'),
   cookieSecure: str('COOKIE_SECURE', 'false') === 'true',
 
   limits: {

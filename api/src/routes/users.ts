@@ -20,7 +20,7 @@ export async function userRoutes(app: FastifyInstance) {
     const q = searchQuery.parse(req.query);
     const pageSize = 20;
     const { rows } = await pool.query(
-      `SELECT u.id, u.display_name, u.created_at, count(a.id)::int AS auctions
+      `SELECT u.id, u.display_name, u.created_at, u.avatar_key, count(a.id)::int AS auctions
          FROM users u JOIN auctions a ON a.seller_id = u.id
         WHERE unaccent(u.display_name) ILIKE unaccent($1)
         GROUP BY u.id
@@ -29,7 +29,13 @@ export async function userRoutes(app: FastifyInstance) {
       [containsPattern(q.q), pageSize, (q.page - 1) * pageSize],
     );
     return {
-      items: rows.map((r) => ({ id: r.id, displayName: r.display_name, createdAt: r.created_at.toISOString(), auctionCount: r.auctions })),
+      items: rows.map((r) => ({
+        id: r.id,
+        displayName: r.display_name,
+        createdAt: r.created_at.toISOString(),
+        avatarUrl: r.avatar_key ? photoUrl(r.avatar_key) : null,
+        auctionCount: r.auctions,
+      })),
       page: q.page,
       pageSize,
     };
@@ -39,7 +45,7 @@ export async function userRoutes(app: FastifyInstance) {
   // Sem e-mail, sem avaliações, sem reputação.
   app.get<{ Params: { id: string } }>('/api/users/:id', async (req, reply) => {
     if (!uuid.safeParse(req.params.id).success) return reply.code(404).send({ error: 'NOT_FOUND' });
-    const { rows } = await pool.query('SELECT id, display_name, created_at FROM users WHERE id = $1', [req.params.id]);
+    const { rows } = await pool.query('SELECT id, display_name, created_at, avatar_key FROM users WHERE id = $1', [req.params.id]);
     const u = rows[0];
     if (!u) return reply.code(404).send({ error: 'NOT_FOUND', message: 'Usuário não encontrado.' });
     const base = { sellerId: u.id, page: 1, pageSize: 50 };
@@ -52,6 +58,7 @@ export async function userRoutes(app: FastifyInstance) {
       id: u.id,
       displayName: u.display_name,
       createdAt: u.created_at.toISOString(),
+      avatarUrl: u.avatar_key ? photoUrl(u.avatar_key) : null,
       auctions: { scheduled: scheduled.items, live: live.items, past: past.items },
     };
   });

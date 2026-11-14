@@ -1,13 +1,15 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { Avatar } from './Avatar';
+
+const AUTH_PAGES = ['/entrar', '/cadastro', '/esqueci-senha', '/redefinir-senha'];
 
 export function Layout() {
-  const { user, logout } = useAuth();
-  const nav = useNavigate();
+  const { user } = useAuth();
   const loc = useLocation();
 
-  // Nas páginas de login e cadastro, delega o layout para a página correspondente
-  const isAuthPage = loc.pathname === '/entrar' || loc.pathname === '/cadastro';
+  // Nas páginas de login, cadastro e senha, delega o layout para a página correspondente
+  const isAuthPage = AUTH_PAGES.includes(loc.pathname);
   if (isAuthPage) {
     return <Outlet />;
   }
@@ -30,27 +32,14 @@ export function Layout() {
           {/* Área do Usuário (à direita no computador; na mesma linha do logo no celular) */}
           <div className="ml-auto flex items-center gap-2 sm:order-last">
             {user ? (
-              <>
-                <Link to={`/usuarios/${user.id}`} className="group flex items-center gap-2.5" title="Meu perfil público">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-brand-500 to-purple-600 text-sm font-bold text-white shadow-inner ring-2 ring-white">
-                    {user.displayName.slice(0, 1).toUpperCase()}
-                  </div>
-                  <div className="hidden text-xs sm:block">
-                    <div className="font-semibold text-slate-800 transition group-hover:text-brand-600">Olá, {user.displayName}</div>
-                    <div className="text-[11px] text-slate-500">Ver meu perfil</div>
-                  </div>
-                </Link>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await logout();
-                    nav('/');
-                  }}
-                  className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-100"
-                >
-                  Sair
-                </button>
-              </>
+              // a conta (dados, senha, foto e "Sair") fica no perfil
+              <Link to={`/usuarios/${user.id}`} className="group flex items-center gap-2.5 rounded-xl px-1.5 py-1 transition hover:bg-slate-100" title="Minha conta">
+                <Avatar name={user.displayName} url={user.avatarUrl} size={36} />
+                <div className="hidden text-xs sm:block">
+                  <div className="font-semibold text-slate-800 transition group-hover:text-brand-600">Olá, {user.displayName}</div>
+                  <div className="text-[11px] text-slate-500">Minha conta</div>
+                </div>
+              </Link>
             ) : (
               <>
                 <Link to="/entrar" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">

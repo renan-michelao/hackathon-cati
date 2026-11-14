@@ -18,8 +18,19 @@ A sessão vai no cookie `sid` (httpOnly), que o navegador envia sozinho.
 | POST | `/api/auth/login` | `{ email, password }` | `{ user }` + cookie |
 | POST | `/api/auth/logout` | — | `{ ok: true }` |
 | GET | `/api/auth/me` | — | `{ user }` ou `401` |
+| POST | `/api/auth/forgot` | `{ email }` | sempre `{ ok, message }` (a mesma resposta, exista ou não a conta) |
+| POST | `/api/auth/reset` | `{ token, password }` | `{ ok, message }`; `400 INVALID_TOKEN` se o link expirou ou já foi usado |
 
-`user = { id, displayName, email, createdAt }`
+`user = { id, displayName, email, createdAt, avatarUrl }` (`avatarUrl` é `null` sem foto)
+
+### Minha conta (exige login)
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| PATCH | `/api/me` | `{ displayName }` | `{ user }` |
+| POST | `/api/me/password` | `{ currentPassword, newPassword }` | `{ ok }`; `400 WRONG_PASSWORD`. Derruba as outras sessões |
+| PUT | `/api/me/avatar` | multipart, um arquivo (JPEG/PNG/WebP até 5 MB) | `{ user }` |
+| DELETE | `/api/me/avatar` | — | `{ user }` |
 
 ## Leilões
 

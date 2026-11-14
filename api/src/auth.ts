@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { pool } from './db.js';
 import { config } from './config.js';
+import { photoUrl } from './storage.js';
 
 const scrypt = promisify(crypto.scrypt) as (pw: string, salt: string, len: number) => Promise<Buffer>;
 
@@ -13,6 +14,18 @@ export interface SessionUser {
   displayName: string;
   email: string;
   createdAt: string;
+  avatarUrl: string | null;
+}
+
+/** Linha do banco (users) -> usuário que a API devolve ao próprio dono. */
+export function toSessionUser(u: { id: string; display_name: string; email: string; created_at: Date; avatar_key: string | null }): SessionUser {
+  return {
+    id: u.id,
+    displayName: u.display_name,
+    email: u.email,
+    createdAt: u.created_at.toISOString(),
+    avatarUrl: u.avatar_key ? photoUrl(u.avatar_key) : null,
+  };
 }
 
 export async function hashPassword(pw: string): Promise<string> {
@@ -30,7 +43,7 @@ export async function verifyPassword(pw: string, stored: string): Promise<boolea
 }
 
 // Só o hash do token fica no banco: um vazamento da tabela não entrega sessões válidas.
-const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
+export const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 
 export async function createSession(userId: string): Promise<string> {
   const token = crypto.randomBytes(32).toString('base64url');
@@ -53,12 +66,21 @@ export async function userFromToken(token: string | undefined): Promise<SessionU
         SET expires_at = now() + make_interval(mins => $2)
        FROM users u
       WHERE s.token_hash = $1 AND s.expires_at > now() AND u.id = s.user_id
-      RETURNING u.id, u.display_name, u.email, u.created_at`,
+      RETURNING u.id, u.display_name, u.email, u.created_at, u.avatar_key`,
     [sha256(token), config.sessionTtlMin],
   );
-  if (!rows[0]) return null;
-  const u = rows[0];
-  return { id: u.id, displayName: u.display_name, email: u.email, createdAt: u.created_at.toISOString() };
+  return rows[0] ? toSessionUser(rows[0]) : null;
+}
+
+/**
+ * Derruba as sessões de um usuário (troca ou redefinição de senha).
+ * `keepToken` mantém a sessão de quem fez a troca, para não deslogar a própria aba.
+ */
+export async function revokeSessions(userId: string, keepToken?: string) {
+  await pool.query(
+    'DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2',
+    [userId, keepToken ? sha256(keepToken) : ''],
+  );
 }
 
 export async function destroySession(token: string | undefined) {
