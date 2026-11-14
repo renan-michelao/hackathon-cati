@@ -9,13 +9,13 @@ As mais importantes vão para o README (seção 8 do edital) e para o pitch.
 
 ### Pré-requisito: Docker
 - **Fedora:** `bash scripts/instalar-docker-fedora.sh`. O script instala o Docker Engine e o Compose do repositório oficial, liga o serviço no boot e coloca o usuário no grupo `docker`. Depois, faça logout e login (ou rode `newgrp docker`) para usar `docker` sem `sudo`.
-- **Ubuntu (VM):** `curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker $USER`
+- **Ubuntu (VM):** `sudo apt-get install -y docker.io docker-compose-v2 && sudo usermod -aG docker $USER` (pacotes oficiais do Ubuntu, ver D28)
 
-### Opção A: tudo em Docker na sua máquina (perfil `local`)
-Sobe banco, API, worker, front e um armazenamento S3 local.
+### Opção A: tudo em Docker na sua máquina
+Sobe banco, API, worker e front. As fotos ficam no volume Docker `fotos`.
 ```bash
-cp .env.local.example .env
-docker compose --profile local up -d --build
+cp .env.example .env
+docker compose up -d --build
 docker compose exec api node dist/seed.js      # contas e leilões de demonstração
 ```
 Abra **http://localhost:8080** e entre com `bruno@demo.com` / `demo1234`. As outras contas estão no README.
@@ -25,36 +25,35 @@ Comandos do dia a dia:
 docker compose ps                 # o que está rodando
 docker compose logs -f api worker # logs ao vivo
 docker compose restart worker     # reinicia só o worker (teste do RF18)
-docker compose down               # para tudo (os dados continuam no volume)
-docker compose down -v            # para tudo e APAGA banco e fotos locais
+docker compose down               # para tudo (banco e fotos continuam nos volumes)
+docker compose down -v            # para tudo e APAGA banco e fotos
 ```
 
 ### Opção B: na VM do hackathon
-Igual à opção A, mas **sem** o perfil `local` (o RF07 proíbe fotos no disco da VM).
-A chave privada fica em `~/.ssh/hackathon` com permissão `600`, **nunca** dentro do repositório (o `.gitignore` bloqueia).
+Os mesmos comandos da opção A. A chave privada fica em `~/.ssh/hackathon` com permissão `600`, **nunca** dentro do repositório (o `.gitignore` bloqueia).
 ```bash
 ssh -i ~/.ssh/hackathon -p 8023 ubuntu@200.18.99.113
-git clone https://github.com/renan-michelao/hackathon-cati.git && cd hackathon-cati
-cp .env.example .env          # senha do banco + credenciais S3_* da organização
+git clone -b feat/estrutura-base https://github.com/renan-michelao/hackathon-cati.git && cd hackathon-cati
+cp .env.example .env          # troque a senha do banco: openssl rand -hex 16
 docker compose up -d --build
 docker compose exec api node dist/seed.js
 ```
+Para atualizar depois de novos commits: `cd ~/hackathon-cati && git pull && docker compose up -d --build`.
 Fica público em **http://200.18.99.113:8083**: a organização repassa a porta 8083 para a 8080 da VM.
 
 ### Opção C: desenvolvimento com recarga automática (sem Docker para o código)
 Melhor para programar: cada alteração aparece na hora.
 ```bash
-podman start kp-db kp-s3      # ou: docker compose --profile local up -d db s3-local (veja a nota abaixo)
-cd api && npm install && npm run dev            # API :3000 (variáveis no README)
+podman start kp-db                              # Postgres na porta 5433 (comando de criação no README)
+cd api && npm install && npm run dev            # API :3000; fotos em api/data/fotos
 cd api && npm run dev:worker                    # worker
 cd web && npm install && npm run dev            # front :5173
 ```
-Nota: no compose, `db` e `s3-local` não publicam portas no computador; por isso a opção C usa os contêineres `kp-db` (porta 5433) e `kp-s3` (porta 9000) do README.
 
 ### Problemas conhecidos (e já resolvidos)
 - **`permission denied` ao rodar `docker`:** faltou entrar no grupo `docker` depois da instalação. Faça logout e login, rode `newgrp docker` ou use `sg docker -c "docker compose ..."`.
 - **API "unhealthy" no compose:** no Alpine, `localhost` resolve para IPv6 (`::1`) e a API escuta em IPv4. O teste de saúde usa `127.0.0.1`.
-- **Upload de fotos falha no `s3-local` com "No writable volumes":** o SeaweedFS reserva volumes de 30 GB por padrão. No compose, limitamos a 100 MB (`-master.volumeSizeLimitMB=100`).
+- **`no configuration file provided`:** o comando rodou fora da pasta do projeto. Entre em `~/hackathon` (ou `~/hackathon-cati` na VM) antes.
 
 ### Conferir as garantias
 ```bash
@@ -143,11 +142,11 @@ cd api && BASE_URL=http://localhost:3000 npx tsx scripts/verificar.ts   # contra
 - **Sem fechar no meio de um lance:** o `UPDATE` disputa a mesma trava de linha do lance. Se um lance está sendo gravado, o fechamento espera e reavalia `ends_at`, que pode ter sido prorrogado. O lance que chega depois do fechamento vê `status ≠ LIVE` e é recusado.
 **Custo:** até ~1 s de atraso para a sala *ver* a abertura ou o fechamento. A *regra* não atrasa: o lance compara com `ends_at` usando o relógio do banco, então nenhum lance é aceito depois do horário.
 
-## D15 · Fotos: armazenamento S3, validação pelo conteúdo, entrega pela API
-**Requisito:** RF07 (Decisão da equipe)
-**Escolha:** usamos qualquer serviço compatível com S3 (endpoint configurável). A API recebe o upload em memória, nunca no disco. Aceitamos JPEG, PNG e WebP, **identificados pelos primeiros bytes do arquivo** e não pela extensão. São de 3 a 8 fotos de até 5 MB cada. O banco guarda só a chave do objeto. As fotos chegam ao navegador por `/api/photos/...`, que busca no armazenamento e repassa.
-**Por quê:** checar o conteúdo impede que alguém envie um executável renomeado para `.jpg`. Repassar pela API funciona mesmo com bucket privado e com a VM expondo só a porta 8080.
-**Custo:** o tráfego das fotos passa pela VM. Mitigamos com cache longo (as fotos não mudam).
+## D15 · Fotos: validação pelo conteúdo e entrega pela API
+**Requisito:** RF07 (Decisão da equipe). O local de armazenamento está em D29.
+**Escolha:** a API recebe o upload em memória e só grava o arquivo depois de validar tudo. Aceitamos JPEG, PNG e WebP, **identificados pelos primeiros bytes do arquivo** e não pela extensão. São de 3 a 8 fotos de até 5 MB cada. O nome do arquivo é gerado pelo servidor (`fotos/<uuid>.<ext>`) e o banco guarda só essa chave. As fotos chegam ao navegador por `/api/photos/...`, que aceita apenas chaves nesse formato, o que impede ler outros arquivos do servidor (ex.: `../../etc/passwd` responde 404).
+**Por quê:** checar o conteúdo impede que alguém envie um executável renomeado para `.jpg`. Gerar o nome no servidor evita colisões e nomes maliciosos.
+**Custo:** o tráfego das fotos passa pela API. Mitigamos com cache longo no navegador (as fotos não mudam).
 
 ## D16 · Identificação do líder sem expor o nome
 **Requisito:** RF09 (Decisão da equipe)
@@ -202,15 +201,13 @@ As categorias são uma lista fixa de 10: Eletrônicos, Informática, Casa e Deco
 ## D26 · Listagem atualizada ao vivo
 **Escolha:** usuários logados recebem `listing:changed` pelo WebSocket e a lista é recarregada, no máximo uma vez a cada 0,5 s. Visitantes recarregam a cada 10 s, porque a conexão em tempo real exige login.
 
-## D22 · Armazenamento local para desenvolvimento
-**Escolha:** em desenvolvimento usamos SeaweedFS (compatível com S3) num contêiner. As imagens oficiais do MinIO deixaram de ser distribuídas publicamente.
-**Observação:** na VM **não** usamos armazenamento local, porque o RF07 proíbe fotos no disco da VM. Lá usamos o serviço de nuvem da organização.
+## D22 · ~~Armazenamento S3 local para desenvolvimento~~ (substituída pela D29)
+Usávamos SeaweedFS (compatível com S3) num contêiner. Com a D29, as fotos vão para uma pasta e o SeaweedFS saiu do projeto.
 
 ## D27 · O mesmo docker compose para a máquina local e para a VM
-**Requisitos:** RNF03, RF07
-**Escolha:** um único `docker-compose.yml`. O armazenamento S3 local (`s3-local`) só sobe com `--profile local`. Há dois modelos de configuração: `.env.local.example` (máquina de desenvolvimento) e `.env.example` (VM, com as credenciais da organização).
-**Por quê:** o que testamos localmente é o mesmo arquivo que roda na VM, então descobrimos problemas de build e rede antes de publicar. O perfil impede, por padrão, que a VM suba um armazenamento no próprio disco e viole o RF07.
-**Custo:** é preciso lembrar de **não** usar `--profile local` na VM. Isso está registrado no README e no `.env.example`.
+**Requisito:** RNF03
+**Escolha:** um único `docker-compose.yml` e um único `.env.example`, usados igualmente no computador e na VM.
+**Por quê:** o que testamos localmente é o mesmo arquivo que roda na VM, então descobrimos problemas de build e rede antes de publicar (foi assim que achamos o problema do teste de saúde em IPv6).
 
 ## D28 · Preparação da VM (1 vCPU, 961 MB de RAM)
 **Requisito:** RNF01
@@ -224,15 +221,16 @@ As categorias são uma lista fixa de 10: Eletrônicos, Informática, Casa e Deco
 **Memória em uso:** Postgres, API, worker e Nginx juntos cabem com folga em ~1 GB; o swap é só a margem de segurança.
 **Verificado no endereço público (14/11, ~15h):** o script de verificação passou em 19 de 19; o lance de outro usuário chegou ao vivo na sala (o WebSocket atravessa o repasse de porta da organização); depois de `docker compose restart`, tudo voltou sozinho, o worker retomou o ciclo e os lances continuaram no banco. Os contêineres usam `restart: unless-stopped` e o Docker sobe no boot, então o sistema também volta se a VM reiniciar.
 
-## ⚠️ Pendência P01 · Armazenamento de fotos na VM
-**Situação atual (provisória):** a VM está rodando com `--profile local`, então as fotos ficam no SeaweedFS **dentro da VM**. Isso **viola o RF07**.
-**Por quê:** a organização ainda não enviou as credenciais do armazenamento em nuvem, e a dica do edital é publicar cedo para achar problemas de rede e permissão.
-**Para resolver quando as credenciais chegarem:**
-```bash
-# na VM, em ~/hackathon-cati: editar .env com S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY da organização
-docker compose --profile local down -v       # derruba tudo e APAGA banco e fotos locais
-docker compose up -d                         # sobe SEM o perfil local
-docker compose exec api node dist/seed.js    # recria os dados de demonstração com fotos na nuvem
-```
-O `-v` é necessário: os leilões já criados apontam para fotos que só existem no armazenamento local.
-Se o serviço da organização não for compatível com S3, só `api/src/storage.ts` muda.
+## D29 · Fotos no disco da VM (correção do RF07)
+**Requisito:** RF07
+**Contexto:** o documento pedia as fotos num armazenamento em nuvem fornecido pela organização, nunca no disco da VM. O líder da equipe (Renan) informou que esse requisito está errado e que **as imagens devem ficar na própria VM**.
+**Escolha:** as fotos são gravadas como arquivos numa pasta (`/data/fotos` dentro do contêiner da API), montada num **volume Docker nomeado** (`fotos`). A API grava num arquivo temporário e renomeia, então nunca existe uma foto pela metade. O código de S3 continua disponível com `STORAGE_DRIVER=s3`, caso o requisito volte a valer.
+**Por quê:**
+- **Mais simples e mais leve:** removemos o SeaweedFS, um processo a menos numa VM de 961 MB de RAM.
+- **Durável:** o volume sobrevive a `docker compose restart`, a rebuilds e a reinícios da VM; só `docker compose down -v` apaga.
+- **Seguro:** a pasta só é lida pela rota `/api/photos/`, que aceita apenas chaves `fotos/<uuid>.<ext>` geradas pelo servidor.
+**Custo:** as fotos ocupam o disco da VM (17 GB livres; com 8 fotos de 5 MB por leilão, cabem ~400 leilões cheios) e não ficam replicadas. Também não dá para rodar mais de uma instância da API em máquinas diferentes sem um armazenamento compartilhado, mas várias instâncias na mesma VM podem montar o mesmo volume.
+**Verificado:** localmente, o script de verificação passou em 19 de 19; as 21 fotos do seed foram gravadas no volume e continuaram acessíveis depois de reiniciar a API; a tentativa de ler `../../etc/passwd` respondeu 404.
+
+## ~~Pendência P01 · Armazenamento de fotos na VM~~ (resolvida pela D29)
+Antes, a VM rodava provisoriamente com o SeaweedFS para contornar a falta de credenciais de nuvem. Com a correção do RF07, gravar as fotos na VM passou a ser o comportamento correto, e o SeaweedFS saiu.
