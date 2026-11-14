@@ -346,3 +346,9 @@ Também tem `parar`, `logs`, `status` e `verificar` (as 55 verificações autom�
 - A validação do link trava a linha (`FOR UPDATE`): dois cliques simultâneos no mesmo link não redefinem duas vezes.
 **Na demo:** pedir o link na tela, mostrar o e-mail com `./rodar.sh emails`, abrir o link e entrar com a senha nova.
 **Verificado:** `api/scripts/verificar-conta.ts` cobre a conta e a redefinição com 26 verificações, todas aprovadas. Também testamos no navegador: foto, apelido, sair, pedido do link e redefinição.
+
+## D42 · Chave do lance compatível com HTTP
+**Problema encontrado no sistema publicado:** o lance não saía do navegador (`crypto.randomUUID is not a function`). O `crypto.randomUUID()` só existe em contexto seguro (HTTPS ou `localhost`), e a VM é servida em HTTP pelo IP. Nos testes locais, em `localhost`, ele existia, e por isso o problema não apareceu.
+**Correção:** `web/src/lib/id.ts` gera o UUID v4 com `crypto.getRandomValues()`, que funciona em qualquer contexto e é igualmente criptográfico, e usa o `randomUUID` quando ele existe.
+**Verificado:** reproduzimos o erro no Docker local removendo o `randomUUID` da página. Com a correção, o lance foi aceito nas mesmas condições, e a chave gravada no banco é um UUID v4 válido.
+**Lição para a banca:** testar também como o usuário acessa de verdade (HTTP pelo IP), não só em `localhost`.
