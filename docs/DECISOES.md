@@ -327,3 +327,22 @@ Também tem `parar`, `logs`, `status` e `verificar` (as 55 verificações autom�
 **Escolha 3 — um visual só.** A cor da marca (`brand-*`) passou a ser o índigo do design do time, e os componentes reutilizáveis (`card`, `btn-*`, `input`, `label`) ganharam os mesmos cantos arredondados. Assim a sala, os formulários, o perfil e "Minhas participações" combinam com a Home sem precisar reescrever cada tela. As telas de login, que usavam azul, também passaram para o índigo.
 
 **Escolha 4 — navegação completa, inclusive no celular.** O menu tinha perdido "Leilões" e "Comitentes" e ficava escondido no celular. Agora tem os quatro itens e, no celular, aparece numa linha com rolagem lateral; o cabeçalho caiu de 175 px para cerca de 115 px.
+
+## D40 · Minha conta: apelido, senha, foto e saída
+**Escolha:** o perfil do **próprio** usuário mostra um painel "Minha conta" com o e-mail (só ele vê), a data de entrada, a troca de apelido, a troca de senha, a foto de perfil e o botão "Sair da conta". O "Sair" deixou o cabeçalho, que agora só leva à conta pelo avatar. Para os outros usuários, o perfil continua público (sem e-mail). "Minhas participações" continua numa página própria.
+**Regras:**
+- **Apelido:** de 2 a 60 caracteres. Nas salas, o líder continua mascarado (D16), já com o apelido novo, porque o nome é lido na hora.
+- **Troca de senha:** exige a senha atual. Se ela estiver errada, a API responde `400 WRONG_PASSWORD`, e não `401`: no front, `401` significa "sessão expirada". Depois da troca, **as sessões em outros navegadores caem** e a sessão de quem trocou continua.
+- **Foto de perfil:** as mesmas regras das fotos dos itens (JPEG, PNG ou WebP validados pelo conteúdo, até 5 MB, gravados no volume `fotos`, D15/D29). Sem foto, aparece a inicial. A foto também aparece no perfil público e na busca de comitentes.
+**Custo:** quando a foto é trocada, o arquivo antigo fica no disco sem uso. Aceitamos isso pela simplicidade; uma limpeza periódica resolveria.
+
+## D41 · Esqueci minha senha com e-mail simulado
+**Escolha:** o usuário informa o e-mail e recebe um **link de uso único, válido por 30 min** (`PASSWORD_RESET_TTL_MIN`). Como o projeto não tem serviço de e-mail, a mensagem vai para uma **caixa de saída simulada** (tabela `email_outbox` e log da API), que só quem opera o servidor lê: `./rodar.sh emails`. Para usar um SMTP de verdade, só a função `sendEmail` (`api/src/mailer.ts`) muda.
+**Segurança:**
+- A resposta é **sempre a mesma**, exista ou não a conta, para não revelar quais e-mails estão cadastrados.
+- O banco guarda só o **hash** do token (como nas sessões, D06). Quem lê a tabela não consegue usar o link.
+- No máximo **um link por minuto** por conta, para impedir que o formulário seja usado para lotar a caixa de alguém.
+- Ao redefinir, o link e qualquer outro pendente da conta são invalidados, e **todas as sessões da conta caem**.
+- A validação do link trava a linha (`FOR UPDATE`): dois cliques simultâneos no mesmo link não redefinem duas vezes.
+**Na demo:** pedir o link na tela, mostrar o e-mail com `./rodar.sh emails`, abrir o link e entrar com a senha nova.
+**Verificado:** `api/scripts/verificar-conta.ts` cobre a conta e a redefinição com 26 verificações, todas aprovadas. Também testamos no navegador: foto, apelido, sair, pedido do link e redefinição.

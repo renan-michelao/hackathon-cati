@@ -50,6 +50,7 @@ O `rodar.sh` faz tudo com um comando: cria o `.env` com uma senha aleatória par
 | `./rodar.sh parar` | Para os contêineres (banco e fotos continuam guardados) |
 | `./rodar.sh logs` | Acompanha os logs da API e do worker |
 | `./rodar.sh status` | Mostra o que está rodando |
+| `./rodar.sh emails` | Mostra a caixa de saída simulada (ex.: o link de "esqueci minha senha") |
 | `./rodar.sh verificar` | Roda as 55 verificações automáticas contra o sistema no ar (precisa de Node.js) |
 
 Sem o script, o equivalente manual é: `cp .env.example .env` (e trocar a senha), `docker compose up -d --build` e `docker compose exec api node dist/seed.js`.
