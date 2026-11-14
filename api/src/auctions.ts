@@ -1,5 +1,5 @@
 // Regras de leilão que tocam o banco: listagem, sala, criação, cancelamento e lances.
-import { pool, tx, notifyAuction, type Tx } from './db.js';
+import { pool, tx, notifyAuction, notifyUser, type Tx } from './db.js';
 import { config } from './config.js';
 import { minNextBid, extendedEnd, maskName, editPolicy, canCancel, canRelist, leadTimeError } from './rules.js';
 import { photoUrl } from './storage.js';
@@ -348,7 +348,8 @@ export type BidReject =
   | 'IS_SELLER'
   | 'ALREADY_LEADER'
   | 'TOO_LOW'
-  | 'RATE_LIMITED';
+  | 'RATE_LIMITED'
+  | 'NOT_IN_ROOM';
 
 const REJECT_MESSAGES: Record<BidReject, string> = {
   NOT_FOUND: 'Leilão não encontrado.',
@@ -358,6 +359,7 @@ const REJECT_MESSAGES: Record<BidReject, string> = {
   ALREADY_LEADER: 'Você já é o líder deste leilão.',
   TOO_LOW: 'O valor é menor que o lance mínimo atual.',
   RATE_LIMITED: 'Muitos lances seguidos. Aguarde um instante.',
+  NOT_IN_ROOM: 'Entre na sala como participante para dar lances.',
 };
 
 export type BidResult =
@@ -375,9 +377,11 @@ export type BidResult =
  *  6. grava lance + novo estado + prorrogação e dispara pg_notify (entregue só no COMMIT).
  * Funciona com várias instâncias da API porque toda a coordenação está no Postgres.
  */
-export async function placeBid(userId: string, auctionId: string, amountCents: number, idempotencyKey: string): Promise<BidResult> {
+export async function placeBid(
+  userId: string, auctionId: string, amountCents: number, idempotencyKey: string, inRoomAsParticipant: boolean,
+): Promise<BidResult> {
   try {
-    return await tx((c) => placeBidTx(c, userId, auctionId, amountCents, idempotencyKey));
+    return await tx((c) => placeBidTx(c, userId, auctionId, amountCents, idempotencyKey, inRoomAsParticipant));
   } catch (e: any) {
     // Corrida rara na chave única: outra requisição idêntica gravou primeiro. Devolve a original.
     if (e?.code === '23505' && String(e?.constraint).includes('bids_idempotency')) {
@@ -405,7 +409,9 @@ async function findBidByKey(c: Tx | typeof pool, userId: string, key: string): P
   };
 }
 
-async function placeBidTx(c: Tx, userId: string, auctionId: string, amountCents: number, key: string): Promise<BidResult> {
+async function placeBidTx(
+  c: Tx, userId: string, auctionId: string, amountCents: number, key: string, inRoom: boolean,
+): Promise<BidResult> {
   // 1. serializa as tentativas do mesmo usuário
   const u = await c.query('SELECT last_bid_attempt_at FROM users WHERE id = $1 FOR UPDATE', [userId]);
 
@@ -433,6 +439,9 @@ async function placeBidTx(c: Tx, userId: string, auctionId: string, amountCents:
   if (a.status !== 'LIVE') return reject(a.status === 'SCHEDULED' ? 'NOT_LIVE' : 'ENDED', minNext);
   if (now.getTime() >= a.ends_at.getTime()) return reject('ENDED', minNext);
   if (a.seller_id === userId) return reject('IS_SELLER', minNext);
+  // RF10.1/RF25: precisa estar na sala como participante. Fica depois do passo 2 de propósito:
+  // o reenvio de um lance já gravado devolve o original mesmo que a conexão da sala tenha caído.
+  if (!inRoom) return reject('NOT_IN_ROOM', minNext);
   if (a.leader_id === userId) return reject('ALREADY_LEADER', minNext);
   if (amountCents < minNext) return reject('TOO_LOW', minNext);
 
@@ -450,6 +459,10 @@ async function placeBidTx(c: Tx, userId: string, auctionId: string, amountCents:
     [auctionId, amountCents, userId, newEnd],
   );
   await notifyAuction(c, auctionId);
+  // RF26: avisa o líder anterior (entregue só no COMMIT, como o resto)
+  if (a.leader_id && a.leader_id !== userId) {
+    await notifyUser(c, { type: 'outbid', userId: a.leader_id, auctionId, amountCents, minNextCents: minNextBid({ bid_count: a.bid_count + 1, start_price_cents: a.start_price_cents, current_price_cents: amountCents }) });
+  }
 
   const after = { bid_count: a.bid_count + 1, start_price_cents: a.start_price_cents, current_price_cents: amountCents };
   return {

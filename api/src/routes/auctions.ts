@@ -10,6 +10,7 @@ import {
 import { detectImage, getPhoto, isValidPhotoKey, uploadPhoto, type ImageType } from '../storage.js';
 import { HttpError } from '../errors.js';
 import { leadTimeError } from '../rules.js';
+import { isParticipant } from '../realtime.js';
 
 const ALL_STATUSES: AuctionStatus[] = ['SCHEDULED', 'LIVE', 'SOLD', 'ENDED_NO_BIDS', 'CANCELLED'];
 const uuid = z.string().uuid();
@@ -161,7 +162,8 @@ export async function auctionRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/api/auctions/:id/bids', { preHandler: requireUser }, async (req, reply) => {
     if (!uuid.safeParse(req.params.id).success) return reply.code(404).send({ error: 'NOT_FOUND' });
     const body = bidBody.parse(req.body);
-    const r = await placeBid(req.user!.id, req.params.id, body.amountCents, body.idempotencyKey);
+    const inRoom = isParticipant(req.user!.id, req.params.id);
+    const r = await placeBid(req.user!.id, req.params.id, body.amountCents, body.idempotencyKey, inRoom);
     if (r.accepted) return reply.code(r.replay ? 200 : 201).send(r);
     const status = r.code === 'NOT_FOUND' ? 404 : r.code === 'RATE_LIMITED' ? 429 : 409;
     return reply.code(status).send(r);
