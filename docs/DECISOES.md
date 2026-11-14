@@ -284,4 +284,4 @@ Antes, a VM rodava provisoriamente com o SeaweedFS para contornar a falta de cre
 
 ## D36 · Cliente de teste que imita o navegador
 **Escolha:** `api/scripts/cliente.ts` é usado pelos dois scripts de verificação. Ele faz HTTP com o cookie de sessão e conecta o Socket.IO para entrar nas salas e receber eventos, como o front faz.
-**Por quê:** as garantias do Nível 2 (presença, avisos, estado em tempo real) só podem ser provadas com uma conexão em tempo real de verdade. Hoje são 20 verificações do Núcleo e 33 do Nível 2.
+**Por quê:** as garantias do Nível 2 (presença, avisos, estado em tempo real) só podem ser provadas com uma conexão em tempo real de verdade. Hoje são 22 verificações do Núcleo e 33 do Nível 2, que passam tanto direto na API quanto pelo Nginx do Docker.

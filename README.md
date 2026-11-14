@@ -69,7 +69,13 @@ cd web && npm install && npm run dev   # http://localhost:5173
 cd api && BASE_URL=http://localhost:3000 npx tsx scripts/verificar.ts
 ```
 
-O script cria usuários e um leilão curto, dispara 8 lances simultâneos de mesmo valor (só 1 pode ser aceito), testa o reenvio do mesmo lance, o limite de frequência, as permissões do comitente e do líder e a prorrogação.
+O script cria usuários e um leilão curto, entra na sala pelo Socket.IO como o navegador, dispara 8 lances simultâneos de mesmo valor (só 1 pode ser aceito), testa o reenvio do mesmo lance, o limite de frequência, as permissões do comitente e do líder e a prorrogação (22 verificações).
+
+```bash
+cd api && BASE_URL=http://localhost:3000 npx tsx scripts/verificar-nivel2.ts
+```
+
+O segundo script cobre o Nível 2 (33 verificações): edição conforme a situação do leilão, relistagem (inclusive duas simultâneas), perfil público, modo espectador, contagem de presença, aviso de lance superado e "Minhas participações".
 
 ## Limites configuráveis
 
