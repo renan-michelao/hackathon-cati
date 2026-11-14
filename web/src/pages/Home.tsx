@@ -10,7 +10,6 @@ interface StatusFilter {
   id: string;
   label: string;
   value: string;
-  count?: number;
 }
 
 export function Home() {
@@ -47,16 +46,10 @@ export function Home() {
     const params = new URLSearchParams({ status, page: String(page) });
     if (q.trim()) params.set('q', q.trim());
     if (category) params.set('category', category);
+    // filtro por comitente feito no servidor: funciona com paginação e ignora acentos
+    if (sellerSearch.trim()) params.set('sellerName', sellerSearch.trim());
 
     const r = await api<Paged<AuctionSummary>>(`/api/auctions?${params}`);
-
-    if (sellerSearch.trim() && r?.items) {
-      const term = sellerSearch.trim().toLowerCase();
-      r.items = r.items.filter((item) =>
-        item.seller?.displayName?.toLowerCase().includes(term)
-      );
-    }
-
     setData(r);
   }, [status, q, category, sellerSearch, page]);
 
@@ -100,10 +93,10 @@ export function Home() {
   };
 
   const tabs: StatusFilter[] = [
-    { id: 'ativos', label: 'Ativos', value: 'LIVE,SCHEDULED', count: 12 },
+    { id: 'ativos', label: 'Ativos', value: 'LIVE,SCHEDULED' },
     { id: 'andamento', label: 'Em andamento', value: 'LIVE' },
-    { id: 'agendados', label: 'Agendados', value: 'SCHEDULED', count: 5 },
-    { id: 'encerrados', label: 'Encerrados', value: 'SOLD,ENDED_NO_BIDS', count: 15 },
+    { id: 'agendados', label: 'Agendados', value: 'SCHEDULED' },
+    { id: 'encerrados', label: 'Encerrados', value: 'SOLD,ENDED_NO_BIDS' },
     { id: 'cancelados', label: 'Cancelados', value: 'CANCELLED' },
     { id: 'meus-lances', label: 'Meus Lances', value: 'meus-lances' },
   ];
@@ -198,7 +191,8 @@ export function Home() {
               }`}
             >
               {t.label}
-              {t.count !== undefined && <span className="ml-1 opacity-90">({t.count})</span>}
+              {/* total real, vindo da API, só na aba selecionada */}
+              {isSelected && data && <span className="ml-1 opacity-90">({data.total})</span>}
             </button>
           );
         })}
