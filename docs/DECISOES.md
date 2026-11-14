@@ -14,10 +14,9 @@ As mais importantes vão para o README (seção 8 do edital) e para o pitch.
 ### Opção A: tudo em Docker na sua máquina
 Sobe banco, API, worker e front. As fotos ficam no volume Docker `fotos`.
 ```bash
-cp .env.example .env
-docker compose up -d --build
-docker compose exec api node dist/seed.js      # contas e leilões de demonstração
+./rodar.sh                 # cria o .env, sobe tudo, espera ficar pronto e cria os dados de demo
 ```
+Equivalente manual: `cp .env.example .env`, `docker compose up -d --build` e `docker compose exec api node dist/seed.js`.
 Abra **http://localhost:8080** e entre com `bruno@demo.com` / `demo1234`. As outras contas estão no README.
 
 Comandos do dia a dia:
@@ -296,3 +295,13 @@ Antes, a VM rodava provisoriamente com o SeaweedFS para contornar a falta de cre
 - **Sala:** contagem de participantes e espectadores, botões "Só assistir" e "Quero participar" (RF25), descrição atualizada ao vivo e link para o perfil do comitente. Ao reconectar, a sala volta no modo que o usuário tinha escolhido.
 - **Páginas novas:** Comitentes (busca), Perfil público e Minhas participações, que se atualiza sozinha quando algum leilão muda.
 **Verificado no navegador (localhost):** acrescentar texto, editar o preço de um agendado, relistar um encerrado sem lances, alternar entre espectador e participante, aviso de lance superado recebido na página de Comitentes, busca sem acento, perfil e participações.
+
+## D38 · Um único comando para subir tudo
+**Requisitos:** RNF03, Bônus 7.2 ("todo o ambiente sobe com um único comando")
+**Escolha:** `./rodar.sh`, na raiz do projeto. Ele:
+1. confere se o Docker está instalado e acessível e, se o usuário ainda não estiver no grupo `docker`, usa `sudo`;
+2. cria o `.env` a partir do `.env.example` na primeira vez, com uma senha aleatória para o banco e permissão `600`;
+3. roda `docker compose up -d --build`, espera `/api/health` responder (até 3 min) e roda o seed, que não duplica dados.
+Também tem `parar`, `logs`, `status` e `verificar` (as 55 verificações automáticas).
+**Proteção:** se existir um banco de uma execução anterior mas o `.env` tiver sumido, o script **para** em vez de gerar uma senha nova, que não abriria o banco existente. Ele explica as duas saídas: restaurar o `.env` ou apagar o volume.
+**Verificado:** num clone limpo do repositório, `./rodar.sh` levou do zero ao sistema no ar em ~12 s (com as camadas do Docker já em cache) e `./rodar.sh verificar` passou nas 55 verificações. Também testamos a proteção do `.env` e as mensagens de "sem permissão no Docker" e "comando desconhecido".

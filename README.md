@@ -39,10 +39,19 @@ Pré-requisito: Docker com Docker Compose.
 ```bash
 git clone https://github.com/renan-michelao/hackathon-cati.git
 cd hackathon-cati
-cp .env.example .env        # troque a senha do banco em POSTGRES_PASSWORD e DATABASE_URL
-docker compose up -d --build
-docker compose exec api node dist/seed.js   # dados de demonstração
+./rodar.sh
 ```
+
+O `rodar.sh` faz tudo com um comando: cria o `.env` com uma senha aleatória para o banco (só na primeira vez), constrói e sobe os contêineres, espera o sistema responder, cria os dados de demonstração (sem duplicar) e mostra o endereço. Outros usos:
+
+| Comando | O que faz |
+|---|---|
+| `./rodar.sh parar` | Para os contêineres (banco e fotos continuam guardados) |
+| `./rodar.sh logs` | Acompanha os logs da API e do worker |
+| `./rodar.sh status` | Mostra o que está rodando |
+| `./rodar.sh verificar` | Roda as 55 verificações automáticas contra o sistema no ar (precisa de Node.js) |
+
+Sem o script, o equivalente manual é: `cp .env.example .env` (e trocar a senha), `docker compose up -d --build` e `docker compose exec api node dist/seed.js`.
 
 O sistema fica em `http://<ip-da-vm>:8080`. Na VM do hackathon, a porta 8080 é publicada como `http://200.18.99.113:8083`.
 
