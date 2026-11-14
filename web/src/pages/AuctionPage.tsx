@@ -137,7 +137,8 @@ export function AuctionPage() {
       </section>
 
       {/* Coluna da sala */}
-      <aside className="space-y-4">
+      {/* no celular a sala vem primeiro: quem abre a página quer acompanhar e dar lance */}
+      <aside className="order-first space-y-4 lg:order-none">
         {!user ? (
           <div className="card space-y-3 p-5 text-center">
             <p className="font-semibold">Entre para acompanhar a sala ao vivo e dar lances.</p>
