@@ -8,7 +8,7 @@ import { SESSION_COOKIE, userFromToken } from './auth.js';
 import { authRoutes } from './routes/auth.js';
 import { auctionRoutes, HttpError } from './routes/auctions.js';
 import { setupRealtime } from './realtime.js';
-import { ensureBucket } from './storage.js';
+import { initStorage } from './storage.js';
 import { pool } from './db.js';
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' }, trustProxy: true });
@@ -44,7 +44,7 @@ await app.register(authRoutes);
 await app.register(auctionRoutes);
 
 await migrate();
-await ensureBucket();
+await initStorage();
 setupRealtime(app.server);
 
 await app.listen({ port: config.port, host: '0.0.0.0' });

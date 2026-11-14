@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 // Toda configuração vem de variáveis de ambiente (ver .env.example).
 // RF06: os limites de leilão ficam aqui para facilitar a demo (ex.: abrir em 1 min e durar 3).
 
@@ -48,6 +50,12 @@ export const config = {
   recentBidsShown: num('RECENT_BIDS_SHOWN', 10),
   workerTickMs: num('WORKER_TICK_MS', 1000),
 
+  // D29: por padrão as fotos ficam no disco da VM (volume Docker em /data/fotos).
+  storage: {
+    driver: str('STORAGE_DRIVER', 'local') as 'local' | 's3',
+    localDir: str('PHOTOS_DIR', path.resolve('data')),
+  },
+
   s3: {
     endpoint: str('S3_ENDPOINT'), // vazio = AWS padrão
     region: str('S3_REGION', 'us-east-1'),
@@ -55,8 +63,6 @@ export const config = {
     accessKeyId: str('S3_ACCESS_KEY'),
     secretAccessKey: str('S3_SECRET_KEY'),
     forcePathStyle: str('S3_FORCE_PATH_STYLE', 'true') === 'true',
-    // Endpoint usado nos links das fotos para o navegador (se diferente do interno).
-    publicEndpoint: str('S3_PUBLIC_ENDPOINT'),
   },
 };
 

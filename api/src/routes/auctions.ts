@@ -5,7 +5,7 @@ import { requireUser } from '../auth.js';
 import {
   cancelAuction, createAuction, getAuctionDetail, getRoomState, listAuctions, placeBid, type AuctionStatus,
 } from '../auctions.js';
-import { detectImage, getPhoto, uploadPhoto, type ImageType } from '../storage.js';
+import { detectImage, getPhoto, isValidPhotoKey, uploadPhoto, type ImageType } from '../storage.js';
 
 const ALL_STATUSES: AuctionStatus[] = ['SCHEDULED', 'LIVE', 'SOLD', 'ENDED_NO_BIDS', 'CANCELLED'];
 const uuid = z.string().uuid();
@@ -137,7 +137,7 @@ export async function auctionRoutes(app: FastifyInstance) {
   // Proxy das fotos (o navegador só enxerga a porta 8080 da VM)
   app.get<{ Params: { '*': string } }>('/api/photos/*', async (req, reply) => {
     const key = req.params['*'];
-    if (!/^fotos\/[\w-]+\.(jpg|png|webp)$/.test(key)) return reply.code(404).send();
+    if (!isValidPhotoKey(key)) return reply.code(404).send();
     try {
       const p = await getPhoto(key);
       reply.header('Content-Type', p.contentType).header('Cache-Control', 'public, max-age=86400, immutable');

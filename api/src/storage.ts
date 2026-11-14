@@ -1,23 +1,18 @@
-// RF07: fotos vão para o armazenamento em nuvem (compatível com S3), nunca para o banco
-// nem para o disco da VM. O upload é validado pelo conteúdo do arquivo, não pela extensão.
+// Fotos dos itens (RF07, com a correção da equipe: as imagens ficam no disco da VM — ver D29).
+// Dois "drivers", escolhidos por STORAGE_DRIVER:
+//   local (padrão) — arquivos numa pasta (no Docker, o volume "fotos" montado em /data/fotos);
+//   s3             — qualquer serviço compatível com S3 (mantido como alternativa).
+// Em ambos, o banco guarda só a chave "fotos/<uuid>.<ext>" e o upload é validado pelo conteúdo.
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from './config.js';
 
-const base = {
-  region: config.s3.region,
-  forcePathStyle: config.s3.forcePathStyle,
-  credentials: config.s3.accessKeyId
-    ? { accessKeyId: config.s3.accessKeyId, secretAccessKey: config.s3.secretAccessKey }
-    : undefined,
-};
-
-const s3 = new S3Client({ ...base, endpoint: config.s3.endpoint || undefined });
-// Cliente só para assinar links com o endereço que o navegador enxerga.
-const s3Public = new S3Client({ ...base, endpoint: config.s3.publicEndpoint || config.s3.endpoint || undefined });
-
 export type ImageType = { mime: string; ext: string };
+
+const MIME_BY_EXT: Record<string, string> = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+const KEY_RE = /^fotos\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
 
 /** Detecta o tipo real pelos "magic bytes". Aceitamos JPEG, PNG e WebP. */
 export function detectImage(buf: Buffer): ImageType | null {
@@ -29,37 +24,86 @@ export function detectImage(buf: Buffer): ImageType | null {
   return null;
 }
 
-export async function uploadPhoto(buf: Buffer, type: ImageType): Promise<string> {
-  const key = `fotos/${crypto.randomUUID()}.${type.ext}`;
-  await s3.send(new PutObjectCommand({ Bucket: config.s3.bucket, Key: key, Body: buf, ContentType: type.mime }));
-  return key;
-}
-
-/** Link temporário (1h) direto no armazenamento (opcional; o padrão é o proxy abaixo). */
-export async function signedPhotoUrl(key: string): Promise<string> {
-  return getSignedUrl(s3Public, new GetObjectCommand({ Bucket: config.s3.bucket, Key: key }), { expiresIn: 3600 });
-}
-
-/** URL que o front usa: a API busca a foto no armazenamento e repassa (só a porta 8080 é exposta). */
+/** URL que o front usa: a API entrega a foto (só a porta 8080 da VM é exposta). */
 export function photoUrl(key: string): string {
   return `/api/photos/${key}`;
 }
 
-/** Lê a foto do armazenamento como stream (sem tocar no disco da VM). */
-export async function getPhoto(key: string) {
-  const r = await s3.send(new GetObjectCommand({ Bucket: config.s3.bucket, Key: key }));
-  return { body: r.Body as NodeJS.ReadableStream, contentType: r.ContentType ?? 'application/octet-stream' };
+export function isValidPhotoKey(key: string): boolean {
+  return KEY_RE.test(key);
 }
 
-/** Cria o bucket se não existir (útil no ambiente local com MinIO). */
-export async function ensureBucket() {
-  try {
-    await s3.send(new HeadBucketCommand({ Bucket: config.s3.bucket }));
-  } catch {
-    try {
-      await s3.send(new CreateBucketCommand({ Bucket: config.s3.bucket }));
-    } catch (e) {
-      console.warn('[storage] não foi possível verificar/criar o bucket:', (e as Error).message);
-    }
-  }
+interface Driver {
+  init(): Promise<void>;
+  put(key: string, buf: Buffer, type: ImageType): Promise<void>;
+  get(key: string): Promise<{ body: NodeJS.ReadableStream; contentType: string }>;
+}
+
+// ---------- disco local ----------
+const localDriver: Driver = {
+  async init() {
+    await fs.promises.mkdir(path.join(config.storage.localDir, 'fotos'), { recursive: true });
+  },
+  async put(key, buf) {
+    const dest = path.join(config.storage.localDir, key);
+    // grava num arquivo temporário e renomeia: nunca existe foto pela metade no lugar final
+    const tmp = `${dest}.${process.pid}.tmp`;
+    await fs.promises.writeFile(tmp, buf, { flag: 'wx' });
+    await fs.promises.rename(tmp, dest);
+  },
+  async get(key) {
+    const file = path.join(config.storage.localDir, key);
+    await fs.promises.access(file);
+    const ext = path.extname(file).slice(1);
+    return { body: fs.createReadStream(file), contentType: MIME_BY_EXT[ext] ?? 'application/octet-stream' };
+  },
+};
+
+// ---------- S3 (alternativa) ----------
+function makeS3Driver(): Driver {
+  const s3 = new S3Client({
+    region: config.s3.region,
+    forcePathStyle: config.s3.forcePathStyle,
+    endpoint: config.s3.endpoint || undefined,
+    credentials: config.s3.accessKeyId
+      ? { accessKeyId: config.s3.accessKeyId, secretAccessKey: config.s3.secretAccessKey }
+      : undefined,
+  });
+  const Bucket = config.s3.bucket;
+  return {
+    async init() {
+      try {
+        await s3.send(new HeadBucketCommand({ Bucket }));
+      } catch {
+        await s3.send(new CreateBucketCommand({ Bucket })).catch((e) =>
+          console.warn('[storage] não foi possível verificar/criar o bucket:', (e as Error).message));
+      }
+    },
+    async put(key, buf, type) {
+      await s3.send(new PutObjectCommand({ Bucket, Key: key, Body: buf, ContentType: type.mime }));
+    },
+    async get(key) {
+      const r = await s3.send(new GetObjectCommand({ Bucket, Key: key }));
+      return { body: r.Body as NodeJS.ReadableStream, contentType: r.ContentType ?? 'application/octet-stream' };
+    },
+  };
+}
+
+const driver: Driver = config.storage.driver === 's3' ? makeS3Driver() : localDriver;
+
+export async function initStorage() {
+  await driver.init();
+  console.log(`[storage] driver=${config.storage.driver}${config.storage.driver === 'local' ? ` pasta=${config.storage.localDir}` : ''}`);
+}
+
+export async function uploadPhoto(buf: Buffer, type: ImageType): Promise<string> {
+  const key = `fotos/${crypto.randomUUID()}.${type.ext}`;
+  await driver.put(key, buf, type);
+  return key;
+}
+
+/** Lê a foto como stream. Lança erro se a chave for inválida ou a foto não existir. */
+export async function getPhoto(key: string) {
+  if (!isValidPhotoKey(key)) throw new Error('chave inválida');
+  return driver.get(key);
 }

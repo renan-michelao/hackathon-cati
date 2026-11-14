@@ -4,7 +4,7 @@
 import { pool, tx } from './db.js';
 import { migrate } from './migrate.js';
 import { hashPassword } from './auth.js';
-import { ensureBucket, uploadPhoto } from './storage.js';
+import { initStorage, uploadPhoto } from './storage.js';
 import { makePng } from './png.js';
 
 const PASSWORD = 'demo1234';
@@ -35,7 +35,7 @@ const AUCTIONS: {
 ];
 
 await migrate();
-await ensureBucket();
+await initStorage();
 
 const exists = await pool.query("SELECT 1 FROM users WHERE lower(email) = 'ana@demo.com'");
 if (exists.rowCount) {
