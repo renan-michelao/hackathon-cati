@@ -7,6 +7,7 @@ import { migrate } from './migrate.js';
 import { SESSION_COOKIE, userFromToken } from './auth.js';
 import { authRoutes } from './routes/auth.js';
 import { auctionRoutes, HttpError } from './routes/auctions.js';
+import { userRoutes } from './routes/users.js';
 import { setupRealtime } from './realtime.js';
 import { initStorage } from './storage.js';
 import { pool } from './db.js';
@@ -42,6 +43,7 @@ app.get('/api/health', async () => {
 
 await app.register(authRoutes);
 await app.register(auctionRoutes);
+await app.register(userRoutes);
 
 await migrate();
 await initStorage();
