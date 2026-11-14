@@ -112,7 +112,10 @@ export function LoginPage() {
             </button>
 
             {/* Sessão: dura 2h sem uso e se renova sozinha enquanto a pessoa usa o site (RF02) */}
-            <p className="text-center text-xs text-slate-500">A sessão se renova enquanto você usa o site.</p>
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>A sessão se renova enquanto você usa o site.</span>
+              <Link to="/esqueci-senha" className="font-semibold text-brand-600 hover:underline">Esqueci minha senha</Link>
+            </div>
           </form>
 
           {/* Atalho Contas de Demonstração */}

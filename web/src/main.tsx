@@ -8,6 +8,7 @@ import { SocketProvider } from './lib/socket';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { LoginPage, RegisterPage } from './pages/AuthPages';
+import { ForgotPasswordPage, ResetPasswordPage } from './pages/PasswordPages';
 import { NewAuction } from './pages/NewAuction';
 import { AuctionPage } from './pages/AuctionPage';
 import { EditAuction, RelistAuction } from './pages/ManageAuction';
@@ -32,6 +33,8 @@ createRoot(document.getElementById('root')!).render(
                 <Route index element={<Home />} />
                 <Route path="entrar" element={<LoginPage />} />
                 <Route path="cadastro" element={<RegisterPage />} />
+                <Route path="esqueci-senha" element={<ForgotPasswordPage />} />
+                <Route path="redefinir-senha" element={<ResetPasswordPage />} />
                 <Route path="leiloes/novo" element={<RequireAuth><NewAuction /></RequireAuth>} />
                 <Route path="leiloes/:id" element={<AuctionPage />} />
                 <Route path="leiloes/:id/editar" element={<RequireAuth><EditAuction /></RequireAuth>} />
