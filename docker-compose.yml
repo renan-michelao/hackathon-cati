@@ -46,5 +46,17 @@ services:
       api:
         condition: service_healthy
 
+  # Só para rodar na máquina de desenvolvimento: armazenamento S3 local.
+  # Na VM NÃO use este perfil (RF07: fotos não podem ficar no disco da VM).
+  # Ative com: docker compose --profile local up -d --build
+  s3-local:
+    image: chrislusf/seaweedfs:latest
+    profiles: ["local"]
+    restart: unless-stopped
+    command: ["server", "-s3", "-ip.bind=0.0.0.0", "-dir=/data"]
+    volumes:
+      - s3data:/data
+
 volumes:
   pgdata:
+  s3data:
