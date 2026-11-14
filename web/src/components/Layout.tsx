@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { GavelIcon } from './GavelIcon';
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -27,7 +28,7 @@ export function Layout() {
           {/* Logo & Marca */}
           <div className="flex items-center gap-6">
             <Link to="/" className="flex items-center gap-2 text-lg font-bold text-slate-900 hover:opacity-90">
-              <span className="text-xl">🔨</span>
+              <GavelIcon className="h-6 w-6 text-slate-900" />
               <span className="tracking-tight">FGR Leilões</span>
             </Link>
 
