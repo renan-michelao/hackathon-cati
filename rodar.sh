@@ -5,6 +5,7 @@
 #   ./rodar.sh parar      para os contêineres (banco e fotos continuam guardados)
 #   ./rodar.sh logs       acompanha os logs da API e do worker
 #   ./rodar.sh status     mostra o que está rodando
+#   ./rodar.sh emails     mostra a caixa de saída simulada (ex.: link de "esqueci minha senha")
 #   ./rodar.sh verificar  roda os scripts de verificação contra o sistema no ar (precisa de Node.js)
 #
 # Funciona igual no computador e na VM. Pré-requisito: Docker com o plugin Compose.
@@ -40,6 +41,10 @@ case "${1:-subir}" in
   parar)  compose down; ok "Parado. Banco e fotos continuam nos volumes."; exit 0 ;;
   logs)   exec "${DOCKER[@]}" compose logs -f api worker ;;
   status) compose ps; exit 0 ;;
+  emails)
+    # caixa de saída simulada (D41): os 5 e-mails mais recentes, como "esqueci minha senha"
+    compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -x -c "SELECT created_at AS enviado_em, to_email AS para, subject AS assunto, body AS mensagem FROM email_outbox ORDER BY created_at DESC LIMIT 5"'
+    exit 0 ;;
   verificar)
     command -v npx >/dev/null || erro "Node.js não encontrado (necessário só para os scripts de verificação)."
     cd api
@@ -48,7 +53,7 @@ case "${1:-subir}" in
     BASE_URL="$URL" npx tsx scripts/verificar-nivel2.ts
     exit 0 ;;
   subir) ;;
-  *) erro "Comando desconhecido: $1 (use: subir, parar, logs, status, verificar)" ;;
+  *) erro "Comando desconhecido: $1 (use: subir, parar, logs, status, emails, verificar)" ;;
 esac
 
 # --- .env: criado na primeira vez, com senha aleatória para o banco ---
