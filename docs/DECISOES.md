@@ -370,3 +370,8 @@ Também tem `parar`, `logs`, `status` e `verificar` (as 55 verificações autom�
 **Requisito:** RF22
 **Escolha:** a página "Comitentes" abre **listando todos os comitentes**, ou seja, quem já anunciou pelo menos um leilão, em ordem alfabética (ignorando acentos), com foto, quantidade de leilões e data de entrada. O campo de busca filtra essa lista enquanto a pessoa digita. São 20 por página, com o total no topo. A API devolve a lista completa quando `q` vem vazio.
 **Por quê:** antes, a página começava vazia e dependia de a pessoa já saber um nome. Com a lista, dá para descobrir quem anuncia, e a busca continua para quando há muitos comitentes.
+
+## D45 · Disco da VM como armazenamento oficial das fotos
+**Contexto:** desde a D29, as fotos são gravadas no disco da VM. Uma verificação no sistema publicado confirmou: o armazenamento ativo é o disco (`driver=local`), não há serviço S3 rodando, as 30 fotos registradas no banco existem como arquivo no volume `fotos`, as 30 chegam pelo endereço público, e uma delas foi comparada byte a byte com o arquivo no disco. O front não carrega nenhuma imagem de fora.
+**Escolha:** o disco da VM passa a ser o **padrão oficial**. As variáveis `S3_*`, que sobraram do armazenamento provisório, saíram do `.env` da VM (com cópia de segurança em `.env.antes-limpeza-s3`), e o `.env.example` deixa claro que não é preciso configurar nada além de `STORAGE_DRIVER=local`.
+**O que continua:** o código do S3 fica no projeto como plano B desligado (`STORAGE_DRIVER=s3`), caso o armazenamento em nuvem volte a ser exigido.
