@@ -25,7 +25,22 @@ export function AuctionPage() {
   const [mode, setMode] = useState<RoomMode>('participant');
   const [presence, setPresence] = useState<Presence | null>(null);
   const [photo, setPhoto] = useState(0);
+  const [switching, setSwitching] = useState(false);
   const wantedMode = useRef<RoomMode>('participant');
+  const toast = useToast();
+
+  // RF25: troca de modo sem sair da sala (usada pela faixa do topo e pelo bloco no lugar do lance)
+  function changeMode(next: RoomMode) {
+    if (!socket) return;
+    setSwitching(true);
+    socket.timeout(5000).emit('room:mode', { auctionId: id, mode: next }, (err: Error | null, r: JoinAck) => {
+      setSwitching(false);
+      if (err || !r?.ok) return toast('err', r?.message ?? 'Não foi possível trocar o modo.');
+      wantedMode.current = r.mode ?? next;
+      setMode(r.mode ?? next);
+      if (r.presence) setPresence(r.presence);
+    });
+  }
 
   const loadDetail = useCallback(() => {
     api<AuctionDetail>(`/api/auctions/${id}`)
@@ -72,6 +87,8 @@ export function AuctionPage() {
     setDetail((d) => (d ? {
       ...d, name: st.name, description: st.description, status: st.status, endsAt: st.endsAt,
       currentPriceCents: st.currentPriceCents, bidCount: st.bidCount,
+      // a política muda quando o leilão abre ou termina com a página aberta (a de agendado vem da API)
+      editPolicy: st.status === 'LIVE' ? 'APPEND_DESCRIPTION' : st.status === 'SCHEDULED' ? d.editPolicy : 'NONE',
       canCancel: st.status === 'SCHEDULED' || (st.status === 'LIVE' && st.bidCount === 0),
       canRelist: st.status === 'ENDED_NO_BIDS' || st.status === 'CANCELLED',
     } : d));
@@ -134,10 +151,10 @@ export function AuctionPage() {
               <div className="rounded-lg bg-amber-100 px-4 py-2 text-sm text-amber-900">Conexão perdida. Reconectando… o estado será atualizado ao voltar.</div>
             )}
             <ModeBar
-              id={id} mode={mode} presence={presence} isSeller={isSeller} live={room.status === 'LIVE' || room.status === 'SCHEDULED'}
-              onMode={(m) => { wantedMode.current = m; setMode(m); }}
+              mode={mode} presence={presence} isSeller={isSeller} switching={switching}
+              open={room.status === 'LIVE' || room.status === 'SCHEDULED'} live={room.status === 'LIVE'} onChange={changeMode}
             />
-            <RoomPanel room={room} me={user.id} isSeller={isSeller} mode={mode} />
+            <RoomPanel room={room} me={user.id} isSeller={isSeller} mode={mode} switching={switching} onChange={changeMode} />
           </>
         )}
       </aside>
@@ -145,48 +162,84 @@ export function AuctionPage() {
   );
 }
 
-/** RF25: participantes x espectadores e troca de modo sem sair da sala. */
-function ModeBar({ id, mode, presence, isSeller, live, onMode }: {
-  id: string; mode: RoomMode; presence: Presence | null; isSeller: boolean; live: boolean;
-  onMode: (m: RoomMode) => void;
+/**
+ * RF25: deixa evidente em que modo a pessoa está.
+ *   participando -> faixa verde, com "Só assistir" discreto ao lado;
+ *   assistindo   -> faixa cinza tracejada, com "Quero participar" em destaque.
+ */
+function ModeBar({ mode, presence, isSeller, switching, open, live, onChange }: {
+  mode: RoomMode; presence: Presence | null; isSeller: boolean; switching: boolean; open: boolean; live: boolean;
+  onChange: (m: RoomMode) => void;
 }) {
-  const socket = useSocket();
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
+  const counts = (
+    <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-slate-600">
+      <span className="whitespace-nowrap" title="Podem dar lances">🙋 <strong>{presence?.participants ?? '—'}</strong> participante(s)</span>
+      <span className="whitespace-nowrap" title="Só assistem">👀 <strong>{presence?.spectators ?? '—'}</strong> espectador(es)</span>
+    </div>
+  );
 
-  function change(next: RoomMode) {
-    if (!socket) return;
-    setBusy(true);
-    socket.timeout(5000).emit('room:mode', { auctionId: id, mode: next }, (err: Error | null, r: JoinAck) => {
-      setBusy(false);
-      if (err || !r?.ok) return toast('err', r?.message ?? 'Não foi possível trocar o modo.');
-      onMode(r.mode ?? next);
-    });
+  if (!open) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" role="status">
+        <div className="font-semibold text-slate-700">Leilão encerrado</div>
+        <div className="text-xs text-slate-500">A sala fica disponível só para consulta.</div>
+      </div>
+    );
+  }
+
+  if (isSeller) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" role="status">
+        <div className="font-semibold text-slate-700">👀 Você assiste como comitente</div>
+        <div className="text-xs text-slate-500">O comitente não dá lances no próprio leilão.</div>
+        {counts}
+      </div>
+    );
+  }
+
+  if (mode === 'participant') {
+    return (
+      <div className="flex items-start justify-between gap-3 rounded-xl border-2 border-emerald-400 bg-emerald-50 px-4 py-3" role="status">
+        <div>
+          <div className="font-semibold text-emerald-800">🙋 Você está participando</div>
+          <div className="text-xs text-emerald-700">Pode dar lances nesta sala.</div>
+          {counts}
+        </div>
+        {open && (
+          <button className="shrink-0 text-xs font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900 disabled:opacity-50"
+            disabled={switching} onClick={() => onChange('spectator')}>Só assistir</button>
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="card flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-      <div className="flex gap-3 text-slate-600">
-        <span title="Podem dar lances">🙋 <strong>{presence?.participants ?? '—'}</strong> participante(s)</span>
-        <span title="Só assistem">👀 <strong>{presence?.spectators ?? '—'}</strong> espectador(es)</span>
+    <div className="flex items-start justify-between gap-3 rounded-xl border-2 border-dashed border-slate-400 bg-slate-100 px-4 py-3" role="status">
+      <div>
+        <div className="font-semibold text-slate-700">👀 Você está só assistindo</div>
+        <div className="text-xs text-slate-600">Os lances ficam desativados até você entrar como participante.</div>
+        {counts}
       </div>
-      {isSeller ? (
-        <span className="text-xs text-slate-500">Você assiste como comitente</span>
-      ) : live && (
-        mode === 'participant'
-          ? <button className="btn-secondary px-3 py-1" disabled={busy} onClick={() => change('spectator')}>Só assistir</button>
-          : <button className="btn-primary px-3 py-1" disabled={busy} onClick={() => change('participant')}>Quero participar</button>
+      {/* em andamento, o botão grande fica no lugar do lance; aqui só antes de abrir */}
+      {open && !live && (
+        <button className="btn-primary shrink-0 px-3 py-1.5" disabled={switching} onClick={() => onChange('participant')}>Quero participar</button>
       )}
     </div>
   );
 }
 
-function RoomPanel({ room, me, isSeller, mode }: { room: RoomState; me: string; isSeller: boolean; mode: RoomMode }) {
+function RoomPanel({ room, me, isSeller, mode, switching, onChange }: {
+  room: RoomState; me: string; isSeller: boolean; mode: RoomMode; switching: boolean; onChange: (m: RoomMode) => void;
+}) {
   const live = room.status === 'LIVE';
   const iAmLeader = room.leaderId === me;
+  const spectating = mode === 'spectator' && !isSeller;
+  const tile = spectating ? 'rounded-lg bg-white/70 p-3 text-slate-500' : 'rounded-lg bg-slate-50 p-3';
 
   return (
-    <div className="card divide-y divide-slate-100">
+    <div className={`divide-y divide-slate-100 rounded-xl ${spectating
+      ? 'border-2 border-dashed border-slate-300 bg-slate-50'
+      : 'border border-slate-200 bg-white shadow-sm'}`}>
       <div className="space-y-3 p-5">
         {room.status === 'SCHEDULED' && (
           <div className="text-center">
@@ -213,27 +266,39 @@ function RoomPanel({ room, me, isSeller, mode }: { room: RoomState; me: string; 
         {room.status === 'CANCELLED' && <div className="rounded-lg bg-red-50 p-4 text-center font-semibold text-red-700">Leilão cancelado</div>}
 
         <div className="grid grid-cols-2 gap-3 text-center">
-          <div className="rounded-lg bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">{room.bidCount ? 'Preço atual' : 'Preço inicial'}</div>
+          <div className={tile}>
+            <div className="text-xs text-slate-500">{room.status === 'SOLD' ? 'Preço final' : room.bidCount ? 'Preço atual' : 'Preço inicial'}</div>
             <div className="text-xl font-bold">{money(room.currentPriceCents ?? room.startPriceCents)}</div>
           </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Lance mínimo</div>
-            <div className="text-xl font-bold">{money(room.minNextCents)}</div>
-          </div>
-          <div className="rounded-lg bg-slate-50 p-3">
+          {live || room.status === 'SCHEDULED' ? (
+            <div className={tile}>
+              <div className="text-xs text-slate-500">Lance mínimo</div>
+              <div className="text-xl font-bold">{money(room.minNextCents)}</div>
+            </div>
+          ) : (
+            <div className={tile}>
+              <div className="text-xs text-slate-500">Preço inicial</div>
+              <div className="text-xl font-bold">{money(room.startPriceCents)}</div>
+            </div>
+          )}
+          <div className={tile}>
             <div className="text-xs text-slate-500">Líder</div>
             <div className="font-semibold">{iAmLeader ? 'Você' : room.leaderAlias ?? '—'}</div>
           </div>
-          <div className="rounded-lg bg-slate-50 p-3">
+          <div className={tile}>
             <div className="text-xs text-slate-500">Total de lances</div>
             <div className="font-semibold">{room.bidCount}</div>
           </div>
         </div>
 
         {live && !isSeller && mode === 'participant' && <BidForm room={room} iAmLeader={iAmLeader} />}
-        {live && !isSeller && mode === 'spectator' && (
-          <p className="text-center text-sm text-slate-500">Você está só assistindo. Clique em “Quero participar” para dar lances.</p>
+        {live && spectating && (
+          <div className="rounded-lg border border-slate-300 bg-white p-4 text-center">
+            <p className="mb-3 text-sm text-slate-600">Você está só assistindo. Quer disputar este item?</p>
+            <button className="btn-primary w-full py-3 text-base" disabled={switching} onClick={() => onChange('participant')}>
+              🙋 Quero participar
+            </button>
+          </div>
         )}
         {live && isSeller && <p className="text-center text-sm text-slate-500">Você é o comitente e não pode dar lances neste leilão.</p>}
       </div>
