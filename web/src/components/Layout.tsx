@@ -1,11 +1,18 @@
 import { useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 
 export function Layout() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
+  const loc = useLocation();
   const [showSellerModal, setShowSellerModal] = useState(false);
+
+  // Nas páginas de login e cadastro, exibe o layout limpo e dedicado
+  const isAuthPage = loc.pathname === '/entrar' || loc.pathname === '/cadastro';
+  if (isAuthPage) {
+    return <Outlet />;
+  }
 
   const link = ({ isActive }: { isActive: boolean }) =>
     `inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition ${
