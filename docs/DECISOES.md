@@ -285,3 +285,14 @@ Antes, a VM rodava provisoriamente com o SeaweedFS para contornar a falta de cre
 ## D36 · Cliente de teste que imita o navegador
 **Escolha:** `api/scripts/cliente.ts` é usado pelos dois scripts de verificação. Ele faz HTTP com o cookie de sessão e conecta o Socket.IO para entrar nas salas e receber eventos, como o front faz.
 **Por quê:** as garantias do Nível 2 (presença, avisos, estado em tempo real) só podem ser provadas com uma conexão em tempo real de verdade. Hoje são 22 verificações do Núcleo e 33 do Nível 2, que passam tanto direto na API quanto pelo Nginx do Docker.
+
+## D37 · Front do Nível 2
+**Requisitos:** RF22, RF23, RF25, RF26, RF27, RF28
+**Escolha:**
+- **Uma conexão de tempo real por aba** (`SocketProvider`), compartilhada pela listagem, pela sala e por "Minhas participações". Antes, cada página abria a sua. Assim o aviso de lance superado (RF26) chega em **qualquer página**, com um link "Ver sala".
+- **Avisos globais** (`ToastProvider`) para lance aceito ou recusado, edição salva e lance superado, no lugar dos avisos locais de cada página.
+- **Os botões seguem a política que vem da API:** a sala mostra "Editar" (agendado com mais de 30 min), "Acrescentar à descrição" (em andamento), "Cancelar" e "Relistar" conforme `editPolicy`, `canCancel` e `canRelist`. A tela de edição muda sozinha: formulário completo, só um campo para acrescentar texto, ou uma mensagem explicando por que não dá para editar. O servidor revalida tudo; o front só evita oferecer o que vai ser recusado.
+- **Um formulário só** (`AuctionForm`) para criar, editar e relistar. Editar e relistar começam preenchidos; as fotos são opcionais e, se enviadas, substituem as atuais.
+- **Sala:** contagem de participantes e espectadores, botões "Só assistir" e "Quero participar" (RF25), descrição atualizada ao vivo e link para o perfil do comitente. Ao reconectar, a sala volta no modo que o usuário tinha escolhido.
+- **Páginas novas:** Comitentes (busca), Perfil público e Minhas participações, que se atualiza sozinha quando algum leilão muda.
+**Verificado no navegador (localhost):** acrescentar texto, editar o preço de um agendado, relistar um encerrado sem lances, alternar entre espectador e participante, aviso de lance superado recebido na página de Comitentes, busca sem acento, perfil e participações.
