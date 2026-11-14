@@ -8,6 +8,7 @@ import { useSocket } from '../lib/socket';
 import { useToast } from '../lib/toast';
 import { syncServerClock } from '../lib/clock';
 import { dateTime, money, parseMoneyToCents } from '../lib/format';
+import { newId } from '../lib/id';
 import { Countdown } from '../components/Countdown';
 import { StatusBadge } from '../components/StatusBadge';
 
@@ -332,7 +333,7 @@ function BidForm({ room, iAmLeader }: { room: RoomState; iAmLeader: boolean }) {
   const pending = useRef<{ cents: number; key: string } | null>(null);
 
   async function send(cents: number) {
-    const key = pending.current?.cents === cents ? pending.current.key : crypto.randomUUID();
+    const key = pending.current?.cents === cents ? pending.current.key : newId();
     pending.current = { cents, key };
     setBusy(true);
     try {
