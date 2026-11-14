@@ -365,3 +365,8 @@ Também tem `parar`, `logs`, `status` e `verificar` (as 55 verificações autom�
 
 **No navegador (RF24, "derrubar a rede durante a disputa"):** com o Bruno na sala em modo "Só assistir", derrubamos a API. A página mostrou "Conexão perdida. Reconectando…". Ao religar, **sem recarregar a página**, o aviso sumiu, o Bruno continuou como espectador, a sala recebeu o lance que a Carla deu depois da volta e apareceu o aviso de lance superado.
 **Por que funciona:** nada que importa fica só na memória. Sessões, lances, leilões e chaves de reenvio estão no banco; o worker relê o banco a cada ciclo; e o navegador lembra a sala e o modo, entrando de novo ao reconectar (a presença é reconstruída a partir disso).
+
+## D44 · Lista de comitentes com filtro
+**Requisito:** RF22
+**Escolha:** a página "Comitentes" abre **listando todos os comitentes**, ou seja, quem já anunciou pelo menos um leilão, em ordem alfabética (ignorando acentos), com foto, quantidade de leilões e data de entrada. O campo de busca filtra essa lista enquanto a pessoa digita. São 20 por página, com o total no topo. A API devolve a lista completa quando `q` vem vazio.
+**Por quê:** antes, a página começava vazia e dependia de a pessoa já saber um nome. Com a lista, dá para descobrir quem anuncia, e a busca continua para quando há muitos comitentes.
