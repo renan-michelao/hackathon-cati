@@ -352,3 +352,16 @@ Também tem `parar`, `logs`, `status` e `verificar` (as 55 verificações autom�
 **Correção:** `web/src/lib/id.ts` gera o UUID v4 com `crypto.getRandomValues()`, que funciona em qualquer contexto e é igualmente criptográfico, e usa o `randomUUID` quando ele existe.
 **Verificado:** reproduzimos o erro no Docker local removendo o `randomUUID` da página. Com a correção, o lance foi aceito nas mesmas condições, e a chave gravada no banco é um UUID v4 válido.
 **Lição para a banca:** testar também como o usuário acessa de verdade (HTTP pelo IP), não só em `localhost`.
+
+## D43 · Prova de queda e volta do sistema
+**Requisitos:** RF18, RF24, RF25, RF12
+**O que testamos:** `api/scripts/verificar-queda.ts` (ou `./rodar.sh verificar-queda`, cerca de 3 min) derruba **a API e o worker** com dois leilões em andamento, usuários logados e dentro da sala (dois participantes, um espectador e o comitente). Um dos leilões **termina durante a queda**. Depois religa tudo e confere 24 itens, todos aprovados:
+- **sessões:** os quatro usuários continuam logados (as sessões ficam no banco);
+- **reconexão:** o tempo real reconecta sozinho, e cada um volta à sala **no mesmo modo**; o espectador continua sem poder dar lance;
+- **estado:** a sala volta com o mesmo total de lances, preço e líder, e a contagem de participantes e espectadores volta igual;
+- **fechamento:** o leilão que venceu durante a queda fecha como **Vendido**, com o vencedor e o valor certos; um lance atrasado é recusado; "Minhas participações" mostra o vencedor;
+- **reenvio:** um lance de antes da queda, reenviado depois, devolve o original;
+- **continuidade:** o outro leilão segue funcionando, com lance novo chegando em tempo real e aviso de lance superado.
+
+**No navegador (RF24, "derrubar a rede durante a disputa"):** com o Bruno na sala em modo "Só assistir", derrubamos a API. A página mostrou "Conexão perdida. Reconectando…". Ao religar, **sem recarregar a página**, o aviso sumiu, o Bruno continuou como espectador, a sala recebeu o lance que a Carla deu depois da volta e apareceu o aviso de lance superado.
+**Por que funciona:** nada que importa fica só na memória. Sessões, lances, leilões e chaves de reenvio estão no banco; o worker relê o banco a cada ciclo; e o navegador lembra a sala e o modo, entrando de novo ao reconectar (a presença é reconstruída a partir disso).
