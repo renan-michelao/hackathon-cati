@@ -1,68 +1,81 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { io, type Socket } from 'socket.io-client';
-import { api, ApiError, post, type AuctionDetail, type BidResponse, type RoomState } from '../lib/api';
+import {
+  api, ApiError, post, type AuctionDetail, type BidResponse, type Presence, type RoomMode, type RoomState,
+} from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useSocket } from '../lib/socket';
+import { useToast } from '../lib/toast';
 import { syncServerClock } from '../lib/clock';
 import { dateTime, money, parseMoneyToCents } from '../lib/format';
 import { Countdown } from '../components/Countdown';
 import { StatusBadge } from '../components/StatusBadge';
 
-type Conn = 'connecting' | 'online' | 'offline';
+interface JoinAck { ok: boolean; state?: RoomState; mode?: RoomMode; presence?: Presence; error?: string; message?: string }
 
 export function AuctionPage() {
   const { id = '' } = useParams();
   const { user } = useAuth();
+  const socket = useSocket();
   const loc = useLocation();
   const [detail, setDetail] = useState<AuctionDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [room, setRoom] = useState<RoomState | null>(null);
-  const [conn, setConn] = useState<Conn>('connecting');
+  const [online, setOnline] = useState(true);
+  const [mode, setMode] = useState<RoomMode>('participant');
+  const [presence, setPresence] = useState<Presence | null>(null);
   const [photo, setPhoto] = useState(0);
-  const [toast, setToast] = useState<{ kind: 'ok' | 'err' | 'warn'; text: string } | null>(null);
-  const prevLeader = useRef<string | null>(null);
+  const wantedMode = useRef<RoomMode>('participant');
 
-  // Detalhe público
-  useEffect(() => {
+  const loadDetail = useCallback(() => {
     api<AuctionDetail>(`/api/auctions/${id}`)
       .then((d) => { setDetail(d); syncServerClock(d.serverNow); })
       .catch(() => setNotFound(true));
   }, [id]);
 
-  // Sala em tempo real (RF09) com reconexão automática (RF24): a cada (re)conexão, entra de
-  // novo na sala e recebe o estado completo lido do banco.
+  useEffect(() => { loadDetail(); }, [loadDetail]);
+
+  // Sala em tempo real (RF09), com reconexão (RF24) e modo espectador/participante (RF25).
+  // A cada (re)conexão, entra de novo no modo escolhido e recebe o estado completo do banco.
   useEffect(() => {
-    if (!user) return;
-    const s: Socket = io({ path: '/socket.io' });
+    if (!socket) return;
     const join = () => {
-      s.emit('room:join', { auctionId: id }, (r: { ok: boolean; state?: RoomState }) => {
-        if (r.ok && r.state) applyState(r.state);
+      socket.emit('room:join', { auctionId: id, mode: wantedMode.current }, (r: JoinAck) => {
+        if (!r.ok || !r.state) return;
+        applyState(r.state);
+        if (r.mode) setMode(r.mode);
+        if (r.presence) setPresence(r.presence);
       });
     };
-    s.on('connect', () => { setConn('online'); join(); });
-    s.on('disconnect', () => setConn('offline'));
-    s.on('connect_error', () => setConn('offline'));
-    s.on('auction:state', (st: RoomState) => { if (st.id === id) applyState(st); });
-    return () => { s.emit('room:leave', { auctionId: id }); s.disconnect(); };
+    const onState = (st: RoomState) => { if (st.id === id) applyState(st); };
+    const onPresence = (p: Presence) => { if (p.auctionId === id) setPresence(p); };
+    const onConnect = () => { setOnline(true); join(); };
+    const onDisconnect = () => setOnline(false);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('auction:state', onState);
+    socket.on('room:presence', onPresence);
+    if (socket.connected) join();
+    return () => {
+      socket.emit('room:leave', { auctionId: id });
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('auction:state', onState);
+      socket.off('room:presence', onPresence);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user]);
+  }, [id, socket]);
 
   function applyState(st: RoomState) {
     syncServerClock(st.serverNow);
-    // RF26: aviso de lance superado
-    if (user && prevLeader.current === user.id && st.leaderId !== user.id && st.status === 'LIVE') {
-      setToast({ kind: 'warn', text: `Seu lance foi superado! Novo lance mínimo: ${money(st.minNextCents)}` });
-    }
-    prevLeader.current = st.leaderId;
     setRoom(st);
-    setDetail((d) => (d ? { ...d, status: st.status, endsAt: st.endsAt, currentPriceCents: st.currentPriceCents, bidCount: st.bidCount } : d));
+    setDetail((d) => (d ? {
+      ...d, name: st.name, description: st.description, status: st.status, endsAt: st.endsAt,
+      currentPriceCents: st.currentPriceCents, bidCount: st.bidCount,
+      canCancel: st.status === 'SCHEDULED' || (st.status === 'LIVE' && st.bidCount === 0),
+      canRelist: st.status === 'ENDED_NO_BIDS' || st.status === 'CANCELLED',
+    } : d));
   }
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 5000);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   if (notFound) return <div className="card p-10 text-center">Leilão não encontrado. <Link to="/" className="text-brand-600">Voltar</Link></div>;
   if (!detail) return <p className="text-slate-500">Carregando…</p>;
@@ -72,13 +85,6 @@ export function AuctionPage() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-      {toast && (
-        <div className={`fixed right-4 top-20 z-20 max-w-sm rounded-lg px-4 py-3 text-sm font-medium shadow-lg ${
-          toast.kind === 'ok' ? 'bg-emerald-600 text-white' : toast.kind === 'warn' ? 'bg-amber-500 text-white' : 'bg-red-600 text-white'}`}>
-          {toast.text}
-        </div>
-      )}
-
       {/* Coluna do item */}
       <section className="space-y-4">
         <div className="card overflow-hidden">
@@ -101,12 +107,15 @@ export function AuctionPage() {
           <h1 className="text-2xl font-bold">{detail.name}</h1>
           <p className="whitespace-pre-line text-slate-700">{detail.description}</p>
           <dl className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-sm">
-            <div><dt className="text-slate-500">Comitente</dt><dd className="font-medium">{detail.seller.displayName}</dd></div>
+            <div>
+              <dt className="text-slate-500">Comitente</dt>
+              <dd className="font-medium"><Link to={`/usuarios/${detail.seller.id}`} className="text-brand-600 hover:underline">{detail.seller.displayName}</Link></dd>
+            </div>
             <div><dt className="text-slate-500">Preço inicial</dt><dd className="font-medium">{money(detail.startPriceCents)}</dd></div>
             <div><dt className="text-slate-500">Início</dt><dd className="font-medium">{dateTime(detail.startsAt)}</dd></div>
             <div><dt className="text-slate-500">Término</dt><dd className="font-medium">{dateTime(room?.endsAt ?? detail.endsAt)}</dd></div>
           </dl>
-          {isSeller && <SellerActions id={id} status={status} bidCount={room?.bidCount ?? detail.bidCount} onDone={(d) => setDetail(d)} onError={(t) => setToast({ kind: 'err', text: t })} />}
+          {isSeller && <SellerActions detail={detail} onChanged={loadDetail} />}
         </div>
       </section>
 
@@ -121,10 +130,14 @@ export function AuctionPage() {
           <div className="card p-5 text-slate-500">Conectando à sala…</div>
         ) : (
           <>
-            {conn === 'offline' && (
+            {!online && (
               <div className="rounded-lg bg-amber-100 px-4 py-2 text-sm text-amber-900">Conexão perdida. Reconectando… o estado será atualizado ao voltar.</div>
             )}
-            <RoomPanel room={room} me={user.id} isSeller={isSeller} onToast={setToast} />
+            <ModeBar
+              id={id} mode={mode} presence={presence} isSeller={isSeller} live={room.status === 'LIVE' || room.status === 'SCHEDULED'}
+              onMode={(m) => { wantedMode.current = m; setMode(m); }}
+            />
+            <RoomPanel room={room} me={user.id} isSeller={isSeller} mode={mode} />
           </>
         )}
       </aside>
@@ -132,10 +145,43 @@ export function AuctionPage() {
   );
 }
 
-function RoomPanel({ room, me, isSeller, onToast }: {
-  room: RoomState; me: string; isSeller: boolean;
-  onToast: (t: { kind: 'ok' | 'err' | 'warn'; text: string }) => void;
+/** RF25: participantes x espectadores e troca de modo sem sair da sala. */
+function ModeBar({ id, mode, presence, isSeller, live, onMode }: {
+  id: string; mode: RoomMode; presence: Presence | null; isSeller: boolean; live: boolean;
+  onMode: (m: RoomMode) => void;
 }) {
+  const socket = useSocket();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  function change(next: RoomMode) {
+    if (!socket) return;
+    setBusy(true);
+    socket.timeout(5000).emit('room:mode', { auctionId: id, mode: next }, (err: Error | null, r: JoinAck) => {
+      setBusy(false);
+      if (err || !r?.ok) return toast('err', r?.message ?? 'Não foi possível trocar o modo.');
+      onMode(r.mode ?? next);
+    });
+  }
+
+  return (
+    <div className="card flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+      <div className="flex gap-3 text-slate-600">
+        <span title="Podem dar lances">🙋 <strong>{presence?.participants ?? '—'}</strong> participante(s)</span>
+        <span title="Só assistem">👀 <strong>{presence?.spectators ?? '—'}</strong> espectador(es)</span>
+      </div>
+      {isSeller ? (
+        <span className="text-xs text-slate-500">Você assiste como comitente</span>
+      ) : live && (
+        mode === 'participant'
+          ? <button className="btn-secondary px-3 py-1" disabled={busy} onClick={() => change('spectator')}>Só assistir</button>
+          : <button className="btn-primary px-3 py-1" disabled={busy} onClick={() => change('participant')}>Quero participar</button>
+      )}
+    </div>
+  );
+}
+
+function RoomPanel({ room, me, isSeller, mode }: { room: RoomState; me: string; isSeller: boolean; mode: RoomMode }) {
   const live = room.status === 'LIVE';
   const iAmLeader = room.leaderId === me;
 
@@ -185,7 +231,10 @@ function RoomPanel({ room, me, isSeller, onToast }: {
           </div>
         </div>
 
-        {live && !isSeller && <BidForm room={room} iAmLeader={iAmLeader} onToast={onToast} />}
+        {live && !isSeller && mode === 'participant' && <BidForm room={room} iAmLeader={iAmLeader} />}
+        {live && !isSeller && mode === 'spectator' && (
+          <p className="text-center text-sm text-slate-500">Você está só assistindo. Clique em “Quero participar” para dar lances.</p>
+        )}
         {live && isSeller && <p className="text-center text-sm text-slate-500">Você é o comitente e não pode dar lances neste leilão.</p>}
       </div>
 
@@ -209,10 +258,8 @@ function RoomPanel({ room, me, isSeller, onToast }: {
   );
 }
 
-function BidForm({ room, iAmLeader, onToast }: {
-  room: RoomState; iAmLeader: boolean;
-  onToast: (t: { kind: 'ok' | 'err' | 'warn'; text: string }) => void;
-}) {
+function BidForm({ room, iAmLeader }: { room: RoomState; iAmLeader: boolean }) {
+  const toast = useToast();
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   // RF12: a mesma tentativa reaproveita a mesma chave em caso de falha de rede.
@@ -226,18 +273,18 @@ function BidForm({ room, iAmLeader, onToast }: {
       const r = await post<BidResponse>(`/api/auctions/${room.id}/bids`, { amountCents: cents, idempotencyKey: key });
       pending.current = null;
       if (r.accepted) {
-        onToast({ kind: 'ok', text: r.replay ? `Lance de ${money(r.bid.amountCents)} já estava registrado.` : `Lance de ${money(cents)} aceito!` });
+        toast('ok', r.replay ? `Lance de ${money(r.bid.amountCents)} já estava registrado.` : `Lance de ${money(cents)} aceito!`);
         setValue('');
       }
     } catch (e) {
       if (e instanceof ApiError && e.body && (e.body as BidResponse).accepted === false) {
         pending.current = null; // recusa definitiva
         const b = e.body as Extract<BidResponse, { accepted: false }>;
-        onToast({ kind: 'err', text: `${b.message}${b.minNextCents ? ` Lance mínimo atual: ${money(b.minNextCents)}.` : ''}` });
+        toast('err', `${b.message}${b.minNextCents ? ` Lance mínimo atual: ${money(b.minNextCents)}.` : ''}`);
       } else if (e instanceof ApiError && e.status === 401) {
-        onToast({ kind: 'err', text: 'Sua sessão expirou. Entre de novo e reenvie: o lance não será duplicado.' });
+        toast('err', 'Sua sessão expirou. Entre de novo e reenvie: o lance não será duplicado.');
       } else {
-        onToast({ kind: 'err', text: 'Falha de rede. Tente de novo: o mesmo lance não será duplicado.' });
+        toast('err', 'Falha de rede. Tente de novo: o mesmo lance não será duplicado.');
       }
     } finally {
       setBusy(false);
@@ -247,7 +294,7 @@ function BidForm({ room, iAmLeader, onToast }: {
   function submit(e: FormEvent) {
     e.preventDefault();
     const cents = parseMoneyToCents(value);
-    if (cents == null) return onToast({ kind: 'err', text: 'Valor inválido. Ex.: 150,00' });
+    if (cents == null) return toast('err', 'Valor inválido. Ex.: 150,00');
     void send(cents);
   }
 
@@ -268,19 +315,30 @@ function BidForm({ room, iAmLeader, onToast }: {
   );
 }
 
-function SellerActions({ id, status, bidCount, onDone, onError }: {
-  id: string; status: string; bidCount: number;
-  onDone: (d: AuctionDetail) => void; onError: (t: string) => void;
-}) {
-  const canCancel = status === 'SCHEDULED' || (status === 'LIVE' && bidCount === 0);
-  if (!canCancel) return null;
+/** RF08, RF23, RF28: só aparecem as ações que a situação atual permite (o servidor revalida). */
+function SellerActions({ detail, onChanged }: { detail: AuctionDetail; onChanged: () => void }) {
+  const toast = useToast();
+  const editLabel = detail.editPolicy === 'APPEND_DESCRIPTION' ? 'Acrescentar à descrição' : 'Editar';
+  if (detail.editPolicy === 'NONE' && !detail.canCancel && !detail.canRelist) return null;
   return (
-    <div className="border-t border-slate-100 pt-3">
-      <button className="btn-danger" onClick={async () => {
-        if (!confirm('Cancelar este leilão? Ele continuará registrado como Cancelado.')) return;
-        try { onDone(await post<AuctionDetail>(`/api/auctions/${id}/cancel`)); }
-        catch (e) { onError(e instanceof ApiError ? e.message : 'Erro ao cancelar.'); }
-      }}>Cancelar leilão</button>
+    <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+      {detail.editPolicy !== 'NONE' && <Link to={`/leiloes/${detail.id}/editar`} className="btn-secondary">{editLabel}</Link>}
+      {detail.canRelist && <Link to={`/leiloes/${detail.id}/relistar`} className="btn-primary">Relistar item</Link>}
+      {detail.canCancel && (
+        <button className="btn-danger" onClick={async () => {
+          if (!confirm('Cancelar este leilão? Ele continuará registrado como Cancelado.')) return;
+          try {
+            await post<AuctionDetail>(`/api/auctions/${detail.id}/cancel`);
+            toast('ok', 'Leilão cancelado.');
+            onChanged();
+          } catch (e) {
+            toast('err', e instanceof ApiError ? e.message : 'Erro ao cancelar.');
+          }
+        }}>Cancelar leilão</button>
+      )}
+      {detail.editPolicy === 'NONE' && detail.status === 'SCHEDULED' && (
+        <span className="self-center text-xs text-slate-500">Edição bloqueada: faltam 30 min ou menos para o início.</span>
+      )}
     </div>
   );
 }
