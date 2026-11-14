@@ -2,10 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { config, CATEGORIES } from '../config.js';
 import { requireUser } from '../auth.js';
+import type { FastifyRequest } from 'fastify';
 import {
-  cancelAuction, createAuction, getAuctionDetail, getRoomState, listAuctions, placeBid, type AuctionStatus,
+  cancelAuction, createAuction, editAuction, getAuctionDetail, getRoomState, listAuctions, placeBid, relistAuction,
+  type AuctionFields, type AuctionStatus,
 } from '../auctions.js';
 import { detectImage, getPhoto, isValidPhotoKey, uploadPhoto, type ImageType } from '../storage.js';
+import { HttpError } from '../errors.js';
+import { leadTimeError } from '../rules.js';
 
 const ALL_STATUSES: AuctionStatus[] = ['SCHEDULED', 'LIVE', 'SOLD', 'ENDED_NO_BIDS', 'CANCELLED'];
 const uuid = z.string().uuid();
@@ -24,8 +28,47 @@ const bidBody = z.object({
   idempotencyKey: z.string().min(8).max(100),
 });
 
-class HttpError extends Error {
-  constructor(public status: number, public code: string, message: string) { super(message); }
+// Campos de um leilão (RF05). Na criação todos são obrigatórios; na edição e na relistagem, opcionais.
+function fieldsSchema() {
+  const L = config.limits;
+  return z.object({
+    name: z.string().trim().min(3, 'Nome muito curto').max(L.nameMax, 'Nome muito longo'),
+    description: z.string().trim().min(10, 'Descrição muito curta').max(L.descriptionMax, 'Descrição muito longa'),
+    category: z.enum(CATEGORIES as unknown as [string, ...string[]], { message: 'Categoria inválida' }),
+    startPriceCents: z.coerce.number().int().min(L.startPriceMinCents, 'Preço inicial muito baixo').max(L.startPriceMaxCents, 'Preço inicial muito alto'),
+    startsAt: z.string().datetime({ offset: true, message: 'Data de início inválida' }).transform((v) => new Date(v)),
+    durationSec: z.coerce.number().int().min(L.durationMinSec, 'Duração muito curta').max(L.durationMaxSec, 'Duração muito longa'),
+  });
+}
+
+/** Lê um formulário multipart: campos de texto + fotos validadas pelo conteúdo, tudo em memória. */
+async function readAuctionForm(req: FastifyRequest) {
+  const L = config.limits;
+  const fields: Record<string, string> = {};
+  const files: { buf: Buffer; type: ImageType }[] = [];
+  for await (const part of req.parts({ limits: { fileSize: L.photoMaxBytes, files: L.photosMax } })) {
+    if (part.type === 'file') {
+      const buf = await part.toBuffer();
+      if ((part.file as any).truncated) throw new HttpError(400, 'PHOTO_TOO_BIG', `Cada foto pode ter no máximo ${L.photoMaxBytes / 1024 / 1024} MB.`);
+      if (buf.length === 0) continue; // campo de arquivo vazio no formulário
+      const type = detectImage(buf);
+      if (!type) throw new HttpError(400, 'PHOTO_TYPE', `"${part.filename}" não é JPEG, PNG ou WebP.`);
+      files.push({ buf, type });
+    } else {
+      const v = String(part.value);
+      if (v !== '') fields[part.fieldname] = v; // campo vazio = "não alterar"
+    }
+  }
+  if (files.length > 0 && files.length < L.photosMin) {
+    throw new HttpError(400, 'PHOTOS_MIN', `Envie pelo menos ${L.photosMin} fotos.`);
+  }
+  return { fields, files };
+}
+
+async function uploadAll(files: { buf: Buffer; type: ImageType }[]) {
+  const keys: string[] = [];
+  for (const f of files) keys.push(await uploadPhoto(f.buf, f.type));
+  return keys;
 }
 
 export async function auctionRoutes(app: FastifyInstance) {
@@ -70,45 +113,35 @@ export async function auctionRoutes(app: FastifyInstance) {
 
   // RF05/RF07: criação com fotos (multipart: campos + arquivos "photos")
   app.post('/api/auctions', { preHandler: requireUser }, async (req, reply) => {
-    const L = config.limits;
-    const fields: Record<string, string> = {};
-    const files: { buf: Buffer; type: ImageType }[] = [];
-
-    for await (const part of req.parts({ limits: { fileSize: L.photoMaxBytes, files: L.photosMax } })) {
-      if (part.type === 'file') {
-        const buf = await part.toBuffer(); // em memória, nunca no disco
-        if ((part.file as any).truncated) throw new HttpError(400, 'PHOTO_TOO_BIG', `Cada foto pode ter no máximo ${L.photoMaxBytes / 1024 / 1024} MB.`);
-        const type = detectImage(buf);
-        if (!type) throw new HttpError(400, 'PHOTO_TYPE', `"${part.filename}" não é JPEG, PNG ou WebP.`);
-        files.push({ buf, type });
-      } else {
-        fields[part.fieldname] = String(part.value);
-      }
-    }
-
-    const body = z
-      .object({
-        name: z.string().trim().min(3, 'Nome muito curto').max(L.nameMax, 'Nome muito longo'),
-        description: z.string().trim().min(10, 'Descrição muito curta').max(L.descriptionMax, 'Descrição muito longa'),
-        category: z.enum(CATEGORIES as unknown as [string, ...string[]], { message: 'Categoria inválida' }),
-        startPriceCents: z.coerce.number().int().min(L.startPriceMinCents, 'Preço inicial muito baixo').max(L.startPriceMaxCents, 'Preço inicial muito alto'),
-        startsAt: z.string().datetime({ offset: true, message: 'Data de início inválida' }),
-        durationSec: z.coerce.number().int().min(L.durationMinSec, 'Duração muito curta').max(L.durationMaxSec, 'Duração muito longa'),
-      })
-      .parse(fields);
-
-    if (files.length < L.photosMin) throw new HttpError(400, 'PHOTOS_MIN', `Envie pelo menos ${L.photosMin} fotos.`);
-
-    const startsAt = new Date(body.startsAt);
-    const leadSec = (startsAt.getTime() - Date.now()) / 1000;
-    if (leadSec < L.leadMinSec) throw new HttpError(400, 'START_TOO_SOON', `O início precisa ser pelo menos ${L.leadMinSec}s no futuro.`);
-    if (leadSec > L.leadMaxDays * 86400) throw new HttpError(400, 'START_TOO_FAR', `O início pode ser no máximo ${L.leadMaxDays} dias à frente.`);
-
-    const photoKeys = [];
-    for (const f of files) photoKeys.push(await uploadPhoto(f.buf, f.type));
-
-    const id = await createAuction({ sellerId: req.user!.id, ...body, startsAt, photoKeys });
+    const { fields, files } = await readAuctionForm(req);
+    const body = fieldsSchema().parse(fields);
+    if (files.length === 0) throw new HttpError(400, 'PHOTOS_MIN', `Envie pelo menos ${config.limits.photosMin} fotos.`);
+    const err = leadTimeError(body.startsAt, new Date());
+    if (err) throw new HttpError(400, 'VALIDATION', err);
+    const photoKeys = await uploadAll(files);
+    const id = await createAuction({ sellerId: req.user!.id, ...body, photoKeys });
     return reply.code(201).send(await getAuctionDetail(id));
+  });
+
+  // RF23: edição (multipart; só os campos enviados mudam; "appendDescription" acrescenta texto)
+  app.patch<{ Params: { id: string } }>('/api/auctions/:id', { preHandler: requireUser }, async (req, reply) => {
+    if (!uuid.safeParse(req.params.id).success) return reply.code(404).send({ error: 'NOT_FOUND' });
+    const { fields, files } = await readAuctionForm(req);
+    const { appendDescription, ...rest } = fields;
+    const parsed = fieldsSchema().partial().parse(rest) as Partial<AuctionFields>;
+    const photoKeys = files.length ? await uploadAll(files) : undefined;
+    await editAuction(req.params.id, req.user!.id, { fields: parsed, photoKeys, appendDescription });
+    return getAuctionDetail(req.params.id);
+  });
+
+  // RF28: relistagem (multipart; início e duração obrigatórios, o resto opcional)
+  app.post<{ Params: { id: string } }>('/api/auctions/:id/relist', { preHandler: requireUser }, async (req, reply) => {
+    if (!uuid.safeParse(req.params.id).success) return reply.code(404).send({ error: 'NOT_FOUND' });
+    const { fields, files } = await readAuctionForm(req);
+    const parsed = fieldsSchema().partial().required({ startsAt: true, durationSec: true }).parse(fields);
+    const photoKeys = files.length ? await uploadAll(files) : undefined;
+    const newId = await relistAuction(req.params.id, req.user!.id, { fields: parsed, photoKeys });
+    return reply.code(201).send(await getAuctionDetail(newId));
   });
 
   // RF08
@@ -148,4 +181,3 @@ export async function auctionRoutes(app: FastifyInstance) {
   });
 }
 
-export { HttpError };
