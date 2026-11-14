@@ -44,6 +44,10 @@ export const config = {
   extensionWindowSec: num('EXTENSION_WINDOW_SEC', 120),
   extensionMaxTotalSec: num('EXTENSION_MAX_TOTAL_SEC', 1800),
 
+  // RF23: a partir de quantos minutos antes do início um leilão agendado não pode mais ser editado.
+  editLockMin: num('EDIT_LOCK_MIN', 30),
+  appendDescriptionMax: num('LIMIT_APPEND_DESCRIPTION_MAX', 1000),
+
   // RF13: intervalo mínimo entre tentativas de lance do mesmo usuário.
   bidMinIntervalMs: num('BID_MIN_INTERVAL_MS', 500),
 

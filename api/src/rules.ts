@@ -32,6 +32,42 @@ export function extendedEnd(endsAt: Date, originalEndsAt: Date, now: Date): Date
   return new Date(Math.max(candidate, endsAt.getTime()));
 }
 
+/** RF05: antecedência do início em relação a "agora". Devolve a mensagem de erro ou null. */
+export function leadTimeError(startsAt: Date, now: Date): string | null {
+  const leadSec = (startsAt.getTime() - now.getTime()) / 1000;
+  if (leadSec < config.limits.leadMinSec) return `O início precisa ser pelo menos ${config.limits.leadMinSec}s no futuro.`;
+  if (leadSec > config.limits.leadMaxDays * 86400) return `O início pode ser no máximo ${config.limits.leadMaxDays} dias à frente.`;
+  return null;
+}
+
+export type EditPolicy = 'ALL' | 'APPEND_DESCRIPTION' | 'NONE';
+
+/**
+ * RF23: quanto mais perto do início e quanto mais lances, menos se pode mudar.
+ *   Agendado, faltando mais de EDIT_LOCK_MIN  -> todos os campos
+ *   Agendado, faltando EDIT_LOCK_MIN ou menos -> nada
+ *   Em andamento (com ou sem lances)           -> só acrescentar texto à descrição
+ *   Vendido, Encerrado sem lances, Cancelado   -> nada
+ * Acrescentar texto não muda preço, horário nem o item em si: não prejudica quem já deu lance.
+ */
+export function editPolicy(a: { status: string; starts_at: Date }, now: Date): EditPolicy {
+  if (a.status === 'SCHEDULED') {
+    return a.starts_at.getTime() - now.getTime() > config.editLockMin * 60_000 ? 'ALL' : 'NONE';
+  }
+  if (a.status === 'LIVE') return 'APPEND_DESCRIPTION';
+  return 'NONE';
+}
+
+/** RF08/RF23: cancela se Agendado (a qualquer momento) ou Em andamento sem lances. */
+export function canCancel(a: { status: string; bid_count: number }): boolean {
+  return a.status === 'SCHEDULED' || (a.status === 'LIVE' && a.bid_count === 0);
+}
+
+/** RF28: só Encerrado sem lances ou Cancelado podem ser relistados. */
+export function canRelist(a: { status: string }): boolean {
+  return a.status === 'ENDED_NO_BIDS' || a.status === 'CANCELLED';
+}
+
 /** RF09: identifica o líder sem expor o nome completo. "Renan Michelão" -> "Re***o". */
 export function maskName(name: string | null | undefined): string | null {
   if (!name) return null;
