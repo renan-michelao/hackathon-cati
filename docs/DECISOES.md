@@ -222,6 +222,7 @@ As categorias são uma lista fixa de 10: Eletrônicos, Informática, Casa e Deco
 - **`.env` da VM criado lá mesmo**, com senha do banco aleatória (`openssl rand -hex 16`) e permissão `600`. A senha nunca passa pelo Git nem pelo chat.
 **Custo:** o primeiro build é lento (1 CPU). Os seguintes reaproveitam o cache do Docker.
 **Memória em uso:** Postgres, API, worker e Nginx juntos cabem com folga em ~1 GB; o swap é só a margem de segurança.
+**Verificado no endereço público (14/11, ~15h):** o script de verificação passou em 19 de 19; o lance de outro usuário chegou ao vivo na sala (o WebSocket atravessa o repasse de porta da organização); depois de `docker compose restart`, tudo voltou sozinho, o worker retomou o ciclo e os lances continuaram no banco. Os contêineres usam `restart: unless-stopped` e o Docker sobe no boot, então o sistema também volta se a VM reiniciar.
 
 ## ⚠️ Pendência P01 · Armazenamento de fotos na VM
 **Situação atual (provisória):** a VM está rodando com `--profile local`, então as fotos ficam no SeaweedFS **dentro da VM**. Isso **viola o RF07**.
