@@ -20,6 +20,7 @@ const listQuery = z.object({
   q: z.string().trim().max(100).optional(),
   category: z.string().optional(),
   seller: z.string().uuid().optional(),
+  sellerName: z.string().trim().max(60).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(20),
 });
@@ -92,6 +93,7 @@ export async function auctionRoutes(app: FastifyInstance) {
       q: q.q || undefined,
       category: q.category || undefined,
       sellerId: q.seller,
+      sellerName: q.sellerName || undefined,
       page: q.page,
       pageSize: q.pageSize,
     });

@@ -43,6 +43,7 @@ export interface ListFilters {
   q?: string;
   category?: string;
   sellerId?: string;
+  sellerName?: string; // RF21/RF22: trecho do nome do comitente
   page: number;
   pageSize: number;
 }
@@ -63,6 +64,10 @@ export async function listAuctions(f: ListFilters) {
     params.push(f.category);
     where.push(`i.category = $${params.length}`);
   }
+  if (f.sellerName) {
+    params.push(containsPattern(f.sellerName));
+    where.push(`unaccent(s.display_name) ILIKE unaccent($${params.length})`);
+  }
   if (f.sellerId) {
     params.push(f.sellerId);
     where.push(`a.seller_id = $${params.length}`);
@@ -80,7 +85,9 @@ export async function listAuctions(f: ListFilters) {
     params,
   );
   const total = await pool.query(
-    `SELECT count(*)::int AS n FROM auctions a JOIN items i ON i.id = a.item_id WHERE ${whereSql}`,
+    `SELECT count(*)::int AS n
+       FROM auctions a JOIN items i ON i.id = a.item_id JOIN users s ON s.id = a.seller_id
+      WHERE ${whereSql}`,
     params.slice(0, -2),
   );
   return { items: rows.map(summary), total: total.rows[0].n, page: f.page, pageSize: f.pageSize };
