@@ -128,6 +128,21 @@ As categorias são uma lista fixa de 10: Eletrônicos, Informática, Casa e Deco
 **Por quê:** com HTTP, validar sessão, aplicar idempotência e mostrar o erro ficam triviais. A reconexão automática do Socket.IO mais o "estado completo a cada entrada" resolvem o RF24 sem precisar reconstruir eventos perdidos.
 **Interpretação:** "estar na sala" (RF10.1) = estar logado com a página da sala aberta.
 
+## D23 · Front: React como página única (SPA) servida pelo Nginx
+**Escolha:** React + Vite + Tailwind, compilado em arquivos estáticos que o Nginx serve. Não usamos Next.js nem renderização no servidor.
+**Por quê:** o front não precisa de SEO nem de servidor próprio. Os arquivos estáticos ficam no mesmo Nginx que já repassa a API, então é um processo a menos na VM.
+
+## D24 · Reenvio seguro no navegador
+**Requisito:** RF12
+**Escolha:** a chave de idempotência é gerada no clique e **reaproveitada** enquanto não houver uma resposta definitiva (falha de rede ou sessão expirada). Ela só é descartada quando o servidor responde aceito ou recusado. A tela avisa: "Tente de novo: o mesmo lance não será duplicado."
+
+## D25 · Aviso de lance superado
+**Requisito:** RF26 (Nível 2)
+**Escolha:** a sala compara o líder anterior com o novo a cada `auction:state`. Se eu era o líder e deixei de ser, aparece um aviso com o novo lance mínimo. Funciona para quem está com a sala aberta.
+
+## D26 · Listagem atualizada ao vivo
+**Escolha:** usuários logados recebem `listing:changed` pelo WebSocket e a lista é recarregada, no máximo uma vez a cada 0,5 s. Visitantes recarregam a cada 10 s, porque a conexão em tempo real exige login.
+
 ## D22 · Armazenamento local para desenvolvimento
 **Escolha:** em desenvolvimento usamos SeaweedFS (compatível com S3) num contêiner. As imagens oficiais do MinIO deixaram de ser distribuídas publicamente.
 **Observação:** na VM **não** usamos armazenamento local, porque o RF07 proíbe fotos no disco da VM. Lá usamos o serviço de nuvem da organização.
