@@ -14,8 +14,10 @@ export function LoginPage() {
   const to = useRedirect();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showDemoUsers, setShowDemoUsers] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -25,29 +27,177 @@ export function LoginPage() {
       await login(email, password);
       nav(to, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao entrar.');
+      setError(err instanceof ApiError ? err.message : 'E-mail ou senha incorretos.');
     } finally {
       setBusy(false);
     }
   }
 
+  const fillDemo = (demoEmail: string) => {
+    setEmail(demoEmail);
+    setPassword('demo1234');
+    setError('');
+  };
+
   return (
-    <form onSubmit={submit} className="card mx-auto mt-8 max-w-sm space-y-4 p-6">
-      <h1 className="text-xl font-bold">Entrar</h1>
-      <div>
-        <label className="label" htmlFor="email">E-mail</label>
-        <input id="email" type="email" className="input" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-      </div>
-      <div>
-        <label className="label" htmlFor="pw">Senha</label>
-        <input id="pw" type="password" className="input" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button className="btn-primary w-full" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
-      <p className="text-center text-sm text-slate-600">
-        Não tem conta? <Link to="/cadastro" state={{ from: to }} className="font-semibold text-brand-600">Cadastre-se</Link>
-      </p>
-    </form>
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-900 relative">
+      {/* Topo Limpo com Logo FGR Leilões */}
+      <header className="border-b border-slate-200/90 bg-white py-3.5 px-6 sm:px-12">
+        <Link to="/" className="inline-flex items-center gap-2.5 text-lg font-bold text-slate-900 hover:opacity-90">
+          <span className="text-xl">🔨</span>
+          <span className="tracking-tight">FGR Leilões</span>
+        </Link>
+      </header>
+
+      {/* Conteúdo Central: Card Branco Flutuante */}
+      <main className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12">
+        <div className="w-full max-w-[440px] bg-white rounded-3xl p-7 sm:p-9 shadow-sm border border-slate-200/70 space-y-5">
+          {/* Título Principal */}
+          <h1 className="text-2xl sm:text-[26px] font-extrabold tracking-tight text-slate-900 text-left">
+            Entrar na conta
+          </h1>
+
+          {/* Card: Novo no FGR Leilões? */}
+          <div className="flex items-center justify-between rounded-2xl bg-slate-100/90 px-4 py-2.5 text-xs sm:text-sm text-slate-700">
+            <span>Novo no FGR Leilões?</span>
+            <Link
+              to="/cadastro"
+              state={{ from: to }}
+              className="rounded-full border border-slate-300 bg-white px-3.5 py-1 text-xs font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 transition"
+            >
+              Criar conta
+            </Link>
+          </div>
+
+          {/* Formulário de Login */}
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <input
+                id="email"
+                type="email"
+                placeholder="E-mail"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <input
+                id="pw"
+                type="password"
+                placeholder="Senha"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            {error && (
+              <div className="rounded-lg bg-red-50 p-2.5 text-xs text-red-600 border border-red-200">
+                {error}
+              </div>
+            )}
+
+            {/* Botão Entrar */}
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-full bg-blue-600 py-3 px-4 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+            >
+              {busy ? 'Entrando…' : 'Entrar'}
+            </button>
+
+            {/* Checkbox Permanecer conectado */}
+            <div className="flex items-center gap-2 pt-1 text-xs sm:text-sm text-slate-700 select-none">
+              <input
+                type="checkbox"
+                id="remember"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+              <label htmlFor="remember" className="cursor-pointer font-medium">
+                Permanecer conectado
+              </label>
+              <span
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 cursor-help text-xs"
+                title="Sua sessão será preservada neste navegador."
+              >
+                ⓘ
+              </span>
+            </div>
+          </form>
+
+          {/* Atalho Contas de Demonstração */}
+          <div className="pt-2 text-center">
+            <button
+              type="button"
+              onClick={() => setShowDemoUsers(!showDemoUsers)}
+              className="text-xs text-slate-500 hover:text-slate-800 underline transition cursor-pointer"
+            >
+              Preencher com conta de demonstração
+            </button>
+
+            {showDemoUsers && (
+              <div className="mt-3 flex flex-wrap justify-center gap-1.5 animate-in fade-in">
+                <button
+                  type="button"
+                  onClick={() => fillDemo('ana@demo.com')}
+                  className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                >
+                  Ana (Comitente)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillDemo('bruno@demo.com')}
+                  className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                >
+                  Bruno (Comprador)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillDemo('carla@demo.com')}
+                  className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                >
+                  Carla (Compradora)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillDemo('diego@demo.com')}
+                  className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                >
+                  Diego (Comprador)
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* Rodapé da Página */}
+      <footer className="py-6 px-4 text-center text-[10px] sm:text-[11px] text-slate-400 leading-relaxed max-w-2xl mx-auto">
+        Copyright © 1995-2026 FGR Leilões Inc. Todos os direitos reservados.{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">Contrato do Usuário</span>,{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">Privacidade</span>,{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">Termos de Uso de Pagamentos</span>,{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">Cookies</span> e{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">AdChoice</span>.
+      </footer>
+
+      {/* Botão Flutuante de Ajuda (?) */}
+      <button
+        type="button"
+        title="Ajuda"
+        className="fixed bottom-6 right-6 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50 transition font-bold text-sm cursor-pointer"
+      >
+        ?
+      </button>
+    </div>
   );
 }
 
@@ -76,25 +226,106 @@ export function RegisterPage() {
   }
 
   return (
-    <form onSubmit={submit} className="card mx-auto mt-8 max-w-sm space-y-4 p-6">
-      <h1 className="text-xl font-bold">Criar conta</h1>
-      <div>
-        <label className="label" htmlFor="name">Nome de exibição</label>
-        <input id="name" className="input" required minLength={2} maxLength={60} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-      </div>
-      <div>
-        <label className="label" htmlFor="email">E-mail</label>
-        <input id="email" type="email" className="input" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-      </div>
-      <div>
-        <label className="label" htmlFor="pw">Senha (mín. 8 caracteres)</label>
-        <input id="pw" type="password" className="input" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button className="btn-primary w-full" disabled={busy}>{busy ? 'Criando…' : 'Criar conta'}</button>
-      <p className="text-center text-sm text-slate-600">
-        Já tem conta? <Link to="/entrar" state={{ from: to }} className="font-semibold text-brand-600">Entrar</Link>
-      </p>
-    </form>
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-900 relative">
+      <header className="border-b border-slate-200/90 bg-white py-3.5 px-6 sm:px-12">
+        <Link to="/" className="inline-flex items-center gap-2.5 text-lg font-bold text-slate-900 hover:opacity-90">
+          <span className="text-xl">🔨</span>
+          <span className="tracking-tight">FGR Leilões</span>
+        </Link>
+      </header>
+
+      <main className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12">
+        <div className="w-full max-w-[440px] bg-white rounded-3xl p-7 sm:p-9 shadow-sm border border-slate-200/70 space-y-5">
+          <h1 className="text-2xl sm:text-[26px] font-extrabold tracking-tight text-slate-900 text-left">
+            Criar conta
+          </h1>
+
+          <div className="flex items-center justify-between rounded-2xl bg-slate-100/90 px-4 py-2.5 text-xs sm:text-sm text-slate-700">
+            <span>Já tem conta no FGR Leilões?</span>
+            <Link
+              to="/entrar"
+              state={{ from: to }}
+              className="rounded-full border border-slate-300 bg-white px-3.5 py-1 text-xs font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 transition"
+            >
+              Entrar
+            </Link>
+          </div>
+
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <input
+                id="name"
+                type="text"
+                placeholder="Nome de exibição"
+                required
+                minLength={2}
+                maxLength={60}
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <input
+                id="email"
+                type="email"
+                placeholder="E-mail"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <input
+                id="pw"
+                type="password"
+                placeholder="Senha (mín. 8 caracteres)"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            {error && (
+              <div className="rounded-lg bg-red-50 p-2.5 text-xs text-red-600 border border-red-200">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-full bg-blue-600 py-3 px-4 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+            >
+              {busy ? 'Criando…' : 'Criar conta'}
+            </button>
+          </form>
+        </div>
+      </main>
+
+      <footer className="py-6 px-4 text-center text-[10px] sm:text-[11px] text-slate-400 leading-relaxed max-w-2xl mx-auto">
+        Copyright © 1995-2026 FGR Leilões Inc. Todos os direitos reservados.{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">Contrato do Usuário</span>,{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">Privacidade</span>,{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">Termos de Uso de Pagamentos</span>,{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">Cookies</span> e{' '}
+        <span className="underline cursor-pointer hover:text-slate-600">AdChoice</span>.
+      </footer>
+
+      <button
+        type="button"
+        title="Ajuda"
+        className="fixed bottom-6 right-6 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50 transition font-bold text-sm cursor-pointer"
+      >
+        ?
+      </button>
+    </div>
   );
 }
