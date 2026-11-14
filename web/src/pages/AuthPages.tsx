@@ -14,10 +14,10 @@ export function LoginPage() {
   const to = useRedirect();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(true);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [showDemoUsers, setShowDemoUsers] = useState(false);
+  const [showDemoMenu, setShowDemoMenu] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -27,17 +27,18 @@ export function LoginPage() {
       await login(email, password);
       nav(to, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'E-mail ou senha incorretos.');
+      setError(err instanceof ApiError ? err.message : 'Erro ao entrar.');
     } finally {
       setBusy(false);
     }
   }
 
-  const fillDemo = (demoEmail: string) => {
-    setEmail(demoEmail);
+  function fillDemo(userEmail: string) {
+    setEmail(userEmail);
     setPassword('demo1234');
     setError('');
-  };
+    setShowDemoMenu(false);
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-900 relative">
@@ -95,6 +96,15 @@ export function LoginPage() {
                 autoComplete="current-password"
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
               />
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => alert('Para a demonstração do hackathon, utilize uma das contas de teste (senha demo1234).')}
+                  className="text-xs text-slate-600 hover:text-slate-900 hover:underline cursor-pointer"
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -117,69 +127,74 @@ export function LoginPage() {
               <input
                 type="checkbox"
                 id="remember"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
               />
-              <label htmlFor="remember" className="cursor-pointer font-medium">
+              <label htmlFor="remember" className="cursor-pointer">
                 Permanecer conectado
               </label>
               <span
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 cursor-help text-xs"
-                title="Sua sessão será preservada neste navegador."
+                className="text-slate-400 hover:text-slate-600 cursor-help text-xs"
+                title="Sua sessão renova automaticamente a cada requisição."
               >
                 ⓘ
               </span>
             </div>
-          </form>
 
-          {/* Atalho Contas de Demonstração */}
-          <div className="pt-2 text-center">
-            <button
-              type="button"
-              onClick={() => setShowDemoUsers(!showDemoUsers)}
-              className="text-xs text-slate-500 hover:text-slate-800 underline transition cursor-pointer"
-            >
-              Preencher com conta de demonstração
-            </button>
+            {/* Preencher com conta de demonstração */}
+            <div className="pt-2 text-center">
+              <div className="relative inline-block text-left">
+                <button
+                  type="button"
+                  onClick={() => setShowDemoMenu(!showDemoMenu)}
+                  className="text-xs text-slate-500 hover:text-slate-800 underline transition cursor-pointer"
+                >
+                  Preencher com conta de demonstração
+                </button>
 
-            {showDemoUsers && (
-              <div className="mt-3 flex flex-wrap justify-center gap-1.5 animate-in fade-in">
-                <button
-                  type="button"
-                  onClick={() => fillDemo('ana@demo.com')}
-                  className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-                >
-                  Ana (Comitente)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemo('bruno@demo.com')}
-                  className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-                >
-                  Bruno (Comprador)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemo('carla@demo.com')}
-                  className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-                >
-                  Carla (Compradora)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemo('diego@demo.com')}
-                  className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-                >
-                  Diego (Comprador)
-                </button>
+                {showDemoMenu && (
+                  <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-lg z-20 text-left">
+                    <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                      Selecione uma conta:
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fillDemo('ana@demo.com')}
+                      className="w-full rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 text-left block"
+                    >
+                      👩‍💼 <strong>Ana</strong> (Comitente/Vendedora)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fillDemo('bruno@demo.com')}
+                      className="w-full rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 text-left block"
+                    >
+                      🙋‍♂️ <strong>Bruno</strong> (Comprador)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fillDemo('carla@demo.com')}
+                      className="w-full rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 text-left block"
+                    >
+                      🙋‍♀️ <strong>Carla</strong> (Comprador)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fillDemo('diego@demo.com')}
+                      className="w-full rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 text-left block"
+                    >
+                      🙋‍♂️ <strong>Diego</strong> (Comprador)
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          </form>
         </div>
       </main>
 
-      {/* Rodapé da Página */}
+      {/* Rodapé com Termos Legais */}
       <footer className="py-6 px-4 text-center text-[10px] sm:text-[11px] text-slate-400 leading-relaxed max-w-2xl mx-auto">
         Copyright © 1995-2026 FGR Leilões Inc. Todos os direitos reservados.{' '}
         <span className="underline cursor-pointer hover:text-slate-600">Contrato do Usuário</span>,{' '}
@@ -189,11 +204,12 @@ export function LoginPage() {
         <span className="underline cursor-pointer hover:text-slate-600">AdChoice</span>.
       </footer>
 
-      {/* Botão Flutuante de Ajuda (?) */}
+      {/* Botão de Ajuda Flutuante */}
       <button
         type="button"
         title="Ajuda"
-        className="fixed bottom-6 right-6 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50 transition font-bold text-sm cursor-pointer"
+        onClick={() => alert('Dúvidas com o login? Utilize as contas demo (senha: demo1234).')}
+        className="fixed bottom-6 right-6 flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 shadow-xs hover:bg-slate-50 transition font-bold text-xs cursor-pointer"
       >
         ?
       </button>
@@ -241,7 +257,7 @@ export function RegisterPage() {
           </h1>
 
           <div className="flex items-center justify-between rounded-2xl bg-slate-100/90 px-4 py-2.5 text-xs sm:text-sm text-slate-700">
-            <span>Já tem conta no FGR Leilões?</span>
+            <span>Já tem uma conta?</span>
             <Link
               to="/entrar"
               state={{ from: to }}
@@ -283,7 +299,7 @@ export function RegisterPage() {
               <input
                 id="pw"
                 type="password"
-                placeholder="Senha (mín. 8 caracteres)"
+                placeholder="Senha (mínimo de 8 caracteres)"
                 required
                 minLength={8}
                 value={password}
@@ -322,7 +338,8 @@ export function RegisterPage() {
       <button
         type="button"
         title="Ajuda"
-        className="fixed bottom-6 right-6 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50 transition font-bold text-sm cursor-pointer"
+        onClick={() => alert('Dúvidas com o cadastro? Preencha os campos para criar uma conta.')}
+        className="fixed bottom-6 right-6 flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 shadow-xs hover:bg-slate-50 transition font-bold text-xs cursor-pointer"
       >
         ?
       </button>

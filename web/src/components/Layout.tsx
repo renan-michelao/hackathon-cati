@@ -19,6 +19,7 @@ export function Layout() {
       isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:text-slate-900'
     }`;
 
+  // Layout padrão para as demais páginas (Home, Sala de Leilão, etc.)
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
