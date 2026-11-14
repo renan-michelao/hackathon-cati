@@ -1,1 +1,96 @@
-# hackathon-cati
+# Kernel Panic Leilões
+
+Plataforma de leilão online em tempo real, feita pela equipe **Kernel Panic** (Renan, Gustavo e Francine) no Hackathon Cati Jr.
+
+**Sistema publicado:** http://200.18.99.113:8083
+
+## Contas de demonstração
+
+Senha de todas: `demo1234`
+
+| E-mail | Papel |
+|---|---|
+| `ana@demo.com` | Comitente (dona dos leilões de demonstração) |
+| `bruno@demo.com` | Comprador |
+| `carla@demo.com` | Comprador |
+| `diego@demo.com` | Comprador |
+
+Os dados de demonstração incluem leilões nos 5 estados: Em andamento (com e sem lances), Agendado (abre em 2 min e em 1 dia), Vendido, Encerrado sem lances e Cancelado.
+
+## Arquitetura
+
+```
+Navegador ──HTTP/WebSocket──▶ web (Nginx :8080) ──▶ api (Node.js :3000) ──▶ db (PostgreSQL)
+                                  └─ arquivos do React                          ▲
+                                                         worker (Node.js) ──────┘
+                                                         api ──▶ armazenamento S3 (fotos)
+```
+
+- **web:** Nginx na porta 8080 (a única exposta pela VM). Serve o React e repassa `/api` e `/socket.io` para a API.
+- **api:** Fastify + Socket.IO. Cuida de login, leilões, lances e da sala em tempo real.
+- **worker:** abre e fecha leilões a cada segundo usando o relógio do banco.
+- **db:** PostgreSQL. Garante a consistência dos lances com trava de linha e avisa as mudanças por `LISTEN/NOTIFY`.
+- **Fotos:** serviço de armazenamento em nuvem compatível com S3, fornecido pela organização.
+
+## Como recriar o ambiente do zero
+
+Pré-requisito: Docker com Docker Compose.
+
+```bash
+git clone https://github.com/renan-michelao/hackathon-cati.git
+cd hackathon-cati
+cp .env.example .env        # preencha POSTGRES_PASSWORD, DATABASE_URL e as credenciais S3_*
+docker compose up -d --build
+docker compose exec api node dist/seed.js   # dados de demonstração
+```
+
+O sistema fica em `http://<ip-da-vm>:8080`. Na VM do hackathon, a porta 8080 é publicada como `http://200.18.99.113:8083`.
+
+### Desenvolvimento local
+
+```bash
+# banco e armazenamento S3 locais
+podman run -d --name kp-db -e POSTGRES_USER=leilao -e POSTGRES_PASSWORD=leilao -e POSTGRES_DB=leilao -p 5433:5432 postgres:16-alpine
+podman run -d --name kp-s3 -p 9000:8333 chrislusf/seaweedfs server -s3 -ip.bind=0.0.0.0 -dir=/data
+
+# API e worker (em terminais separados)
+cd api && npm install
+export DATABASE_URL=postgres://leilao:leilao@localhost:5433/leilao S3_ENDPOINT=http://localhost:9000 S3_ACCESS_KEY=x S3_SECRET_KEY=x
+npm run dev            # API em :3000
+npm run dev:worker     # worker
+npm run seed:dev       # dados de demonstração
+
+# front
+cd web && npm install && npm run dev   # http://localhost:5173
+```
+
+### Verificação automática das garantias
+
+```bash
+cd api && BASE_URL=http://localhost:3000 npx tsx scripts/verificar.ts
+```
+
+O script cria usuários e um leilão curto, dispara 8 lances simultâneos de mesmo valor (só 1 pode ser aceito), testa o reenvio do mesmo lance, o limite de frequência, as permissões do comitente e do líder e a prorrogação.
+
+## Limites configuráveis
+
+Todos ficam no `.env` (veja `.env.example`). Para a demo, use leilões curtos: o início pode ser a partir de 30 s no futuro e a duração a partir de 1 min.
+
+## Decisões da equipe
+
+O registro completo, com alternativas e custos, está em [docs/DECISOES.md](docs/DECISOES.md). Resumo:
+
+| Requisito | Decisão | Por quê |
+|---|---|---|
+| RF02 Sessão | Token aleatório em cookie `httpOnly`; expira após 2h sem uso e se renova a cada requisição | Revogável no servidor e inacessível ao JavaScript; ninguém é deslogado no meio de uma disputa |
+| RF05/RF06 Limites | Nome 3–120 caracteres; descrição 10–5000; 3–8 fotos; início de 30 s a 30 dias; duração de 1 min a 7 dias; 10 categorias fixas | Todos em variáveis de ambiente, o que permite leilões curtos na demo |
+| RF07 Fotos | JPEG/PNG/WebP de até 5 MB, validados pelo conteúdo do arquivo; armazenamento S3; entrega via API | Um arquivo renomeado não passa; funciona com bucket privado e só a porta 8080 |
+| RF09 Sala | Socket.IO; últimos 10 lances; líder mascarado ("Re***o") | Reconexão automática e nome nunca exposto por completo |
+| RF11 Concorrência | `SELECT ... FOR UPDATE` na linha do leilão + aviso por `pg_notify`, entregue só após o COMMIT | Lances do mesmo leilão entram em fila no banco; correto mesmo com várias instâncias |
+| RF12 Reenvio | Chave única por tentativa, gerada no navegador, com índice único no banco | Clique duplo ou falha de rede devolvem o lance original |
+| RF13 Frequência | Mínimo de 500 ms entre tentativas do mesmo usuário, controlado no banco | Um usuário não bloqueia outro e reenvios legítimos não são punidos |
+| RF14 Lance mínimo | Tabela de incrementos de referência do edital | Previsível e calculada só no servidor |
+| RF15 Prorrogação | Lance com menos de 2 min no relógio leva o término para 2 min depois dele; teto de 30 min acumulados | Todos têm chance de resposta e o leilão sempre termina |
+| RF17/RF18 Tempo | Worker a cada 1 s com `UPDATE` condicional usando o relógio do banco | Nada em memória: sobrevive a reinícios e fechar duas vezes não duplica |
+| RF20 Listagem | Em andamento primeiro (termina antes no topo), depois agendados; 20 por página; busca e filtros | Destaca o que está acontecendo agora e aguenta muitos leilões |
+| RNF01 VM | Docker Compose: Nginx, API, worker e Postgres | Sobe com um comando e cabe na única porta exposta |
