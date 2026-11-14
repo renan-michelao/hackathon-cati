@@ -34,3 +34,10 @@ export const AUCTION_CHANNEL = 'auction_events';
 export async function notifyAuction(c: Tx | pg.Pool, auctionId: string) {
   await c.query('SELECT pg_notify($1, $2)', [AUCTION_CHANNEL, auctionId]);
 }
+
+/** Avisos pessoais (RF26). Mesmo princípio: dentro da transação, entregue só no COMMIT. */
+export const USER_CHANNEL = 'user_events';
+
+export async function notifyUser(c: Tx | pg.Pool, event: { type: string; userId: string; [k: string]: unknown }) {
+  await c.query('SELECT pg_notify($1, $2)', [USER_CHANNEL, JSON.stringify(event)]);
+}
