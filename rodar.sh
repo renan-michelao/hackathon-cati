@@ -7,6 +7,7 @@
 #   ./rodar.sh status     mostra o que está rodando
 #   ./rodar.sh emails     mostra a caixa de saída simulada (ex.: link de "esqueci minha senha")
 #   ./rodar.sh verificar  roda os scripts de verificação contra o sistema no ar (precisa de Node.js)
+#   ./rodar.sh verificar-queda  derruba API e worker no meio de leilões e confere se tudo volta
 #
 # Funciona igual no computador e na VM. Pré-requisito: Docker com o plugin Compose.
 set -euo pipefail
@@ -52,8 +53,15 @@ case "${1:-subir}" in
     BASE_URL="$URL" npx tsx scripts/verificar.ts
     BASE_URL="$URL" npx tsx scripts/verificar-nivel2.ts
     exit 0 ;;
+  verificar-queda)
+    # derruba API e worker no meio de leilões e confere se tudo volta (leva ~3 min)
+    command -v npx >/dev/null || erro "Node.js não encontrado (necessário só para os scripts de verificação)."
+    cd api
+    [ -d node_modules ] || npm install --silent
+    COMPOSE_CMD="${DOCKER[*]} compose" BASE_URL="$URL" npx tsx scripts/verificar-queda.ts
+    exit 0 ;;
   subir) ;;
-  *) erro "Comando desconhecido: $1 (use: subir, parar, logs, status, emails, verificar)" ;;
+  *) erro "Comando desconhecido: $1 (use: subir, parar, logs, status, emails, verificar, verificar-queda)" ;;
 esac
 
 # --- .env: criado na primeira vez, com senha aleatória para o banco ---
