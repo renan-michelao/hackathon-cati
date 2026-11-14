@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { pool } from '../db.js';
 import { requireUser } from '../auth.js';
 import { listAuctions } from '../auctions.js';
-import { minNextBid } from '../rules.js';
+import { containsPattern, minNextBid } from '../rules.js';
 import { photoUrl } from '../storage.js';
 
 const uuid = z.string().uuid();
@@ -26,7 +26,7 @@ export async function userRoutes(app: FastifyInstance) {
         GROUP BY u.id
         ORDER BY u.display_name
         LIMIT $2 OFFSET $3`,
-      [`%${q.q}%`, pageSize, (q.page - 1) * pageSize],
+      [containsPattern(q.q), pageSize, (q.page - 1) * pageSize],
     );
     return {
       items: rows.map((r) => ({ id: r.id, displayName: r.display_name, createdAt: r.created_at.toISOString(), auctionCount: r.auctions })),

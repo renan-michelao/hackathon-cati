@@ -68,6 +68,14 @@ export function canRelist(a: { status: string }): boolean {
   return a.status === 'ENDED_NO_BIDS' || a.status === 'CANCELLED';
 }
 
+/**
+ * RF21/RF22: padrão de busca "contém o texto". Escapa % e _ (curingas do LIKE) para que buscar
+ * "%" procure o caractere "%" em vez de trazer tudo.
+ */
+export function containsPattern(text: string): string {
+  return `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
 /** RF09: identifica o líder sem expor o nome completo. "Renan Michelão" -> "Re***o". */
 export function maskName(name: string | null | undefined): string | null {
   if (!name) return null;

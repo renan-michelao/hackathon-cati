@@ -1,7 +1,7 @@
 // Regras de leilão que tocam o banco: listagem, sala, criação, cancelamento e lances.
 import { pool, tx, notifyAuction, notifyUser, type Tx } from './db.js';
 import { config } from './config.js';
-import { minNextBid, extendedEnd, maskName, editPolicy, canCancel, canRelist, leadTimeError } from './rules.js';
+import { minNextBid, extendedEnd, maskName, editPolicy, canCancel, canRelist, leadTimeError, containsPattern } from './rules.js';
 import { photoUrl } from './storage.js';
 import { HttpError } from './errors.js';
 
@@ -56,7 +56,7 @@ export async function listAuctions(f: ListFilters) {
   const where: string[] = ['a.status = ANY($1)'];
   const params: unknown[] = [f.statuses];
   if (f.q) {
-    params.push(`%${f.q}%`);
+    params.push(containsPattern(f.q));
     where.push(`unaccent(i.name) ILIKE unaccent($${params.length})`);
   }
   if (f.category) {
