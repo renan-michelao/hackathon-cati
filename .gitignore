@@ -4,3 +4,10 @@ dist/
 *.log
 .DS_Store
 .claude/
+
+# chaves SSH nunca entram no repositório
+hackathon
+hackaton
+*.pem
+id_*
+*.save
