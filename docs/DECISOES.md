@@ -57,6 +57,7 @@ cd web && npm install && npm run dev            # front :5173
 
 ### Conferir as garantias
 ```bash
+cd api && BASE_URL=http://localhost:3000 npx tsx scripts/verificar-nivel2.ts   # requisitos de Nível 2
 cd api && BASE_URL=http://localhost:8080 npx tsx scripts/verificar.ts   # contra o Docker (opção A)
 cd api && BASE_URL=http://localhost:3000 npx tsx scripts/verificar.ts   # contra a opção C
 ```
@@ -184,7 +185,7 @@ As categorias são uma lista fixa de 10: Eletrônicos, Informática, Casa e Deco
 **Requisitos:** RF09, RF10, RF24
 **Escolha:** o lance é um `POST /api/auctions/:id/bids` (resposta imediata e explícita com o motivo da recusa e o lance mínimo atual). O estado da sala chega por Socket.IO. Ao reconectar, o cliente entra de novo na sala e recebe o estado completo lido do banco.
 **Por quê:** com HTTP, validar sessão, aplicar idempotência e mostrar o erro ficam triviais. A reconexão automática do Socket.IO mais o "estado completo a cada entrada" resolvem o RF24 sem precisar reconstruir eventos perdidos.
-**Interpretação:** "estar na sala" (RF10.1) = estar logado com a página da sala aberta.
+**Interpretação:** "estar na sala" (RF10.1) = ter a sala aberta, conectada pelo Socket.IO, **como participante**. Isso passou a ser verificado no servidor a partir da D33.
 
 ## D23 · Front: React como página única (SPA) servida pelo Nginx
 **Escolha:** React + Vite + Tailwind, compilado em arquivos estáticos que o Nginx serve. Não usamos Next.js nem renderização no servidor.
@@ -234,3 +235,53 @@ Usávamos SeaweedFS (compatível com S3) num contêiner. Com a D29, as fotos vã
 
 ## ~~Pendência P01 · Armazenamento de fotos na VM~~ (resolvida pela D29)
 Antes, a VM rodava provisoriamente com o SeaweedFS para contornar a falta de credenciais de nuvem. Com a correção do RF07, gravar as fotos na VM passou a ser o comportamento correto, e o SeaweedFS saiu.
+
+## D30 · Perfil público e busca de comitentes
+**Requisito:** RF22
+**Escolha:** `GET /api/users?q=` busca pelo nome de exibição sem diferenciar acentos e maiúsculas (`unaccent` + `ILIKE`). `GET /api/users/:id` mostra nome, data de entrada e os leilões separados em agendados, em andamento e passados. Em "passados" entram Vendido, Encerrado sem lances e Cancelado.
+**Por quê:**
+- **Só aparece quem já anunciou:** o requisito fala em buscar *comitentes*, e quem nunca anunciou não é comitente. Isso também evita expor a lista de todos os usuários cadastrados.
+- **Cancelados aparecem nos passados:** dá transparência sobre o histórico do comitente sem criar reputação, que o requisito proíbe.
+- **O e-mail nunca sai na resposta.**
+
+## D31 · Minhas participações
+**Requisito:** RF27
+**Escolha:** `GET /api/me/participations` lista os leilões em que dei lance, com o meu maior lance e uma `situation`: `leader` (em andamento e sou o líder), `winner` (vendido para mim) ou `outbid` (alguém passou meu lance, ou o leilão terminou com outro vencedor). Os em andamento aparecem primeiro, depois os mais recentes.
+**Por quê:** tudo vem de uma única consulta agregada sobre `bids`, sem tabela extra. A situação é derivada do estado do leilão, então nunca fica desatualizada.
+
+## D32 · Política de edição e cancelamento
+**Requisito:** RF23 (Decisão da equipe)
+**Escolha:** adotamos a tabela de referência do edital, com o limite de 30 min configurável em `EDIT_LOCK_MIN`:
+
+| Situação | Edição | Cancelamento |
+|---|---|---|
+| Agendado, faltando mais de 30 min | Todos os campos, incluindo trocar as fotos | Sim |
+| Agendado, faltando 30 min ou menos | Nenhuma | Sim |
+| Em andamento, sem lances | Só acrescentar texto à descrição | Sim |
+| Em andamento, com lances | Só acrescentar texto à descrição | Não |
+| Vendido, Encerrado sem lances, Cancelado | Nenhuma | Não |
+
+**Como:** `PATCH /api/auctions/:id` trava a linha do leilão e decide a política com o relógio do banco (`rules.editPolicy`). Assim um lance ou a abertura automática não acontecem no meio de uma edição. O texto acrescentado entra como "— Atualização do comitente: …" no fim da descrição e chega na hora a quem está na sala. O detalhe do leilão informa `editPolicy`, `canCancel` e `canRelist` para o front mostrar só os botões possíveis; o servidor revalida em cada ação.
+**Por quê:** acrescentar texto não muda preço, horário nem o item, então não prejudica quem já deu lance. Travar a edição 30 min antes do início protege quem já se programou para o leilão.
+**Custo:** se o comitente errar algo grave com o leilão em andamento, só resta cancelar (se ainda não houver lances).
+
+## D33 · Espectador, participante e presença na sala
+**Requisitos:** RF25, RF10.1
+**Escolha:** ao entrar (`room:join`) o usuário escolhe `participant` (padrão) ou `spectator` e pode trocar com `room:mode` sem sair. **O comitente sempre entra como espectador.** A sala recebe `room:presence` com quantos participantes e espectadores estão nela, contando **pessoas**, não abas: quem tem ao menos uma aba como participante conta como participante. O servidor só aceita lance de quem está na sala como participante (`NOT_IN_ROOM`).
+**Detalhe importante:** a checagem de presença vem **depois** da checagem de reenvio. Se a conexão cair e o navegador reenviar um lance já gravado, a resposta continua sendo o lance original (RF12).
+**Custo:** a presença fica na memória da instância da API. Com várias instâncias, ela teria de ir para um lugar compartilhado (Redis ou uma tabela). Registramos isso como limitação conhecida, porque hoje rodamos uma instância.
+
+## D34 · Aviso de lance superado pelo servidor
+**Requisito:** RF26
+**Escolha:** quando um lance é aceito, a mesma transação faz `pg_notify('user_events', …)` para o líder anterior. Cada socket conectado entra numa sala pessoal (`user:<id>`), e a API repassa como `user:outbid`, com o nome do item e o novo lance mínimo.
+**Por quê:** o aviso só sai depois do COMMIT, então ninguém é avisado de um lance que não existiu. Chega em qualquer página do site, não só na sala. Funciona com várias instâncias, pelo mesmo mecanismo da D09. (A sala também mostra o aviso localmente, como na D25.)
+
+## D35 · Relistagem
+**Requisito:** RF28
+**Escolha:** `POST /api/auctions/:id/relist`, a partir de um leilão Encerrado sem lances ou Cancelado, cria um **novo** leilão para o **mesmo item**. O antigo continua registrado como estava. Início e duração são obrigatórios (os antigos já passaram); nome, descrição, categoria, preço e fotos são opcionais, e o que não vier é mantido.
+**Por quê:** guardar o histórico completo é o que o RF08 já pede para cancelamentos. A regra "um item nunca tem dois leilões ativos" fica no índice único parcial do banco (D19), então duas relistagens simultâneas resultam em uma criada e outra recusada (`ALREADY_ACTIVE`). O script de verificação testa exatamente esse caso.
+**Custo:** nome, descrição e fotos pertencem ao item. Editá-los na relistagem também muda como o leilão antigo aparece. Aceitamos isso para manter o modelo simples (item → vários leilões).
+
+## D36 · Cliente de teste que imita o navegador
+**Escolha:** `api/scripts/cliente.ts` é usado pelos dois scripts de verificação. Ele faz HTTP com o cookie de sessão e conecta o Socket.IO para entrar nas salas e receber eventos, como o front faz.
+**Por quê:** as garantias do Nível 2 (presença, avisos, estado em tempo real) só podem ser provadas com uma conexão em tempo real de verdade. Hoje são 20 verificações do Núcleo e 33 do Nível 2.
