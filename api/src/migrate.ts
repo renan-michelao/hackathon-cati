@@ -78,6 +78,29 @@ CREATE TABLE IF NOT EXISTS bids (
 CREATE UNIQUE INDEX IF NOT EXISTS bids_idempotency_uq ON bids (bidder_id, idempotency_key);
 CREATE INDEX IF NOT EXISTS bids_auction ON bids (auction_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS bids_bidder  ON bids (bidder_id);
+
+-- Foto de perfil (opcional): só a chave do arquivo, como nas fotos dos itens.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT;
+
+-- Esqueci minha senha: só o hash do token fica no banco; uso único e prazo curto.
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash TEXT PRIMARY KEY,
+  user_id    UUID NOT NULL REFERENCES users(id),
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS password_resets_user ON password_resets (user_id, created_at DESC);
+
+-- Caixa de saída simulada: a plataforma não tem serviço de e-mail; as mensagens ficam aqui
+-- (visíveis só para quem opera o servidor: ./rodar.sh emails).
+CREATE TABLE IF NOT EXISTS email_outbox (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  to_email   TEXT NOT NULL,
+  subject    TEXT NOT NULL,
+  body       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 export async function migrate() {
