@@ -51,7 +51,7 @@ A sessão vai no cookie `sid` (httpOnly), que o navegador envia sozinho.
 
 | Método | Rota | Login | Descrição |
 |---|---|---|---|
-| GET | `/api/users?q=&page=1` | não | **RF22** busca comitentes pelo nome (sem acento/maiúscula): `{ items: [{ id, displayName, createdAt, auctionCount }] }` |
+| GET | `/api/users?q=&page=1` | não | **RF22** sem `q`, lista **todos** os comitentes em ordem alfabética; com `q`, filtra pelo nome (sem acento/maiúscula). 20 por página: `{ items: [{ id, displayName, createdAt, avatarUrl, auctionCount }], total, page, pageSize }` |
 | GET | `/api/users/:id` | não | **RF22** perfil público: `{ id, displayName, createdAt, auctions: { scheduled[], live[], past[] } }` (sem e-mail) |
 | GET | `/api/me/participations` | sim | **RF27** `{ items: [{ auctionId, name, status, coverUrl, myBestCents, myBidCount, currentPriceCents, minNextCents, endsAt, situation }] }`; `situation` = `leader` / `outbid` / `winner` |
 

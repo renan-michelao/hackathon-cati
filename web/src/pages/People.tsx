@@ -11,31 +11,45 @@ import { useAuth } from '../lib/auth';
 
 const joinedAt = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-// RF22: busca de comitentes pelo nome.
+// RF22: todos os comitentes (quem já anunciou), com busca pelo nome que filtra a lista.
 export function SellersPage() {
   const [q, setQ] = useState('');
-  const [items, setItems] = useState<SellerHit[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<{ items: SellerHit[]; total: number; pageSize: number } | null>(null);
 
   useEffect(() => {
     const term = q.trim();
-    if (!term) return setItems(null);
+    const params = new URLSearchParams({ page: String(page) });
+    if (term) params.set('q', term);
+    // espera a pessoa parar de digitar antes de buscar
     const t = setTimeout(() => {
-      api<{ items: SellerHit[] }>(`/api/users?q=${encodeURIComponent(term)}`).then((r) => setItems(r.items));
-    }, 250);
+      api<{ items: SellerHit[]; total: number; pageSize: number }>(`/api/users?${params}`).then(setData);
+    }, term ? 250 : 0);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, page]);
+
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-2xl font-bold">Comitentes</h1>
-      <input className="input" placeholder="Buscar pelo nome de exibição…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
-      {items === null ? (
-        <p className="text-sm text-slate-500">Digite um nome para buscar quem anuncia na plataforma.</p>
-      ) : items.length === 0 ? (
-        <div className="card p-6 text-center text-slate-500">Nenhum comitente encontrado.</div>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Comitentes</h1>
+          <p className="text-sm text-slate-500">Quem anuncia na plataforma. Clique para ver o perfil e os leilões.</p>
+        </div>
+        {data && <span className="shrink-0 text-sm text-slate-500">{data.total} {q.trim() ? 'encontrado(s)' : 'no total'}</span>}
+      </div>
+      <input className="input" placeholder="Filtrar pelo nome de exibição…" value={q}
+        onChange={(e) => { setQ(e.target.value); setPage(1); }} autoFocus />
+      {data === null ? (
+        <p className="text-sm text-slate-500">Carregando…</p>
+      ) : data.items.length === 0 ? (
+        <div className="card p-6 text-center text-slate-500">
+          {q.trim() ? `Nenhum comitente com "${q.trim()}" no nome.` : 'Ainda não há comitentes.'}
+        </div>
       ) : (
         <ul className="card divide-y divide-slate-100">
-          {items.map((u) => (
+          {data.items.map((u) => (
             <li key={u.id}>
               <Link to={`/usuarios/${u.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
                 <span className="flex items-center gap-3 font-medium">
@@ -47,6 +61,13 @@ export function SellersPage() {
             </li>
           ))}
         </ul>
+      )}
+      {pages > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <button className="btn-secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>Anterior</button>
+          <span className="text-sm text-slate-600">Página {page} de {pages}</span>
+          <button className="btn-secondary" disabled={page >= pages} onClick={() => setPage(page + 1)}>Próxima</button>
+        </div>
       )}
     </div>
   );

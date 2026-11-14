@@ -9,26 +9,35 @@ import { photoUrl } from '../storage.js';
 const uuid = z.string().uuid();
 
 const searchQuery = z.object({
-  q: z.string().trim().min(1).max(60),
+  q: z.string().trim().max(60).optional(), // vazio = todos os comitentes
   page: z.coerce.number().int().min(1).default(1),
 });
 
 export async function userRoutes(app: FastifyInstance) {
   // RF22: busca de comitentes pelo nome de exibição (sem diferenciar acentos e maiúsculas).
   // Só aparecem usuários que já anunciaram algo: quem nunca anunciou não é comitente.
+  // Sem `q`, lista todos os comitentes em ordem alfabética; com `q`, filtra pelo nome.
   app.get('/api/users', async (req) => {
     const q = searchQuery.parse(req.query);
     const pageSize = 20;
+    const pattern = containsPattern(q.q ?? ''); // '' vira '%%', que casa com qualquer nome
     const { rows } = await pool.query(
       `SELECT u.id, u.display_name, u.created_at, u.avatar_key, count(a.id)::int AS auctions
          FROM users u JOIN auctions a ON a.seller_id = u.id
         WHERE unaccent(u.display_name) ILIKE unaccent($1)
         GROUP BY u.id
-        ORDER BY u.display_name
+        ORDER BY lower(unaccent(u.display_name)), u.id
         LIMIT $2 OFFSET $3`,
-      [containsPattern(q.q), pageSize, (q.page - 1) * pageSize],
+      [pattern, pageSize, (q.page - 1) * pageSize],
+    );
+    const total = await pool.query(
+      `SELECT count(DISTINCT u.id)::int AS n
+         FROM users u JOIN auctions a ON a.seller_id = u.id
+        WHERE unaccent(u.display_name) ILIKE unaccent($1)`,
+      [pattern],
     );
     return {
+      total: total.rows[0].n,
       items: rows.map((r) => ({
         id: r.id,
         displayName: r.display_name,
