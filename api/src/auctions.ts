@@ -1,8 +1,9 @@
 // Regras de leilão que tocam o banco: listagem, sala, criação, cancelamento e lances.
 import { pool, tx, notifyAuction, type Tx } from './db.js';
 import { config } from './config.js';
-import { minNextBid, extendedEnd, maskName } from './rules.js';
+import { minNextBid, extendedEnd, maskName, editPolicy, canCancel, canRelist, leadTimeError } from './rules.js';
 import { photoUrl } from './storage.js';
+import { HttpError } from './errors.js';
 
 export type AuctionStatus = 'SCHEDULED' | 'LIVE' | 'SOLD' | 'ENDED_NO_BIDS' | 'CANCELLED';
 
@@ -91,11 +92,16 @@ export async function getAuctionDetail(id: string) {
   const r = rows[0];
   if (!r) return null;
   const photos = await pool.query('SELECT storage_key FROM item_photos WHERE item_id = $1 ORDER BY position', [r.item_id]);
+  const now = new Date();
   return {
     ...summary(r),
     description: r.description,
     photos: photos.rows.map((p) => photoUrl(p.storage_key)),
-    serverNow: new Date().toISOString(),
+    // o que o comitente pode fazer agora (RF08, RF23, RF28); o servidor revalida em cada ação
+    editPolicy: editPolicy(r, now),
+    canCancel: canCancel(r),
+    canRelist: canRelist(r),
+    serverNow: now.toISOString(),
   };
 }
 
@@ -117,6 +123,8 @@ export async function getRoomState(id: string, c: Tx | typeof pool = pool) {
   );
   return {
     id: r.id,
+    name: r.name,
+    description: r.description, // RF23: texto acrescentado durante o leilão chega na hora
     status: r.status as AuctionStatus,
     startPriceCents: r.start_price_cents,
     currentPriceCents: r.current_price_cents,
@@ -189,6 +197,148 @@ export async function cancelAuction(id: string, sellerId: string) {
     if (rows[0]) await notifyAuction(c, id);
     return rows.length > 0;
   });
+}
+
+export interface AuctionFields {
+  name: string;
+  description: string;
+  category: string;
+  startPriceCents: number;
+  startsAt: Date;
+  durationSec: number;
+}
+
+async function replacePhotos(c: Tx, itemId: string, keys: string[]) {
+  await c.query('DELETE FROM item_photos WHERE item_id = $1', [itemId]);
+  for (const [i, key] of keys.entries()) {
+    await c.query('INSERT INTO item_photos (item_id, storage_key, position) VALUES ($1,$2,$3)', [itemId, key, i]);
+  }
+}
+
+async function dbNow(c: Tx): Promise<Date> {
+  return (await c.query('SELECT clock_timestamp() AS now')).rows[0].now;
+}
+
+/**
+ * RF23: edição pelo comitente, conforme a política da situação atual (rules.editPolicy).
+ * A linha do leilão fica travada durante a edição, então um lance ou a abertura automática
+ * não acontecem no meio dela, e a política é decidida com o relógio do banco.
+ */
+export async function editAuction(
+  id: string,
+  sellerId: string,
+  input: { fields: Partial<AuctionFields>; photoKeys?: string[]; appendDescription?: string },
+) {
+  await tx(async (c) => {
+    const { rows } = await c.query(
+      `SELECT a.*, i.description FROM auctions a JOIN items i ON i.id = a.item_id WHERE a.id = $1 FOR UPDATE OF a`,
+      [id],
+    );
+    const a = rows[0];
+    if (!a) throw new HttpError(404, 'NOT_FOUND', 'Leilão não encontrado.');
+    if (a.seller_id !== sellerId) throw new HttpError(403, 'NOT_OWNER', 'Só o comitente pode editar o leilão.');
+
+    const now = await dbNow(c);
+    const policy = editPolicy(a, now);
+    const changesFields = Object.keys(input.fields).length > 0 || (input.photoKeys?.length ?? 0) > 0;
+    const append = input.appendDescription?.trim();
+
+    if (policy === 'NONE') {
+      const why = a.status === 'SCHEDULED'
+        ? `Faltam ${config.editLockMin} minutos ou menos para o início: o leilão não pode mais ser editado.`
+        : 'Leilões encerrados ou cancelados não podem ser editados.';
+      throw new HttpError(409, 'EDIT_NOT_ALLOWED', why);
+    }
+    if (policy === 'APPEND_DESCRIPTION' && changesFields) {
+      throw new HttpError(409, 'EDIT_NOT_ALLOWED', 'Com o leilão em andamento, só é possível acrescentar texto à descrição.');
+    }
+    if (!changesFields && !append) throw new HttpError(400, 'NOTHING_TO_CHANGE', 'Nada para alterar.');
+
+    let description: string = input.fields.description ?? a.description;
+    if (append) {
+      if (append.length > config.appendDescriptionMax) {
+        throw new HttpError(400, 'VALIDATION', `O texto acrescentado pode ter no máximo ${config.appendDescriptionMax} caracteres.`);
+      }
+      description = `${description}\n\n— Atualização do comitente: ${append}`;
+      if (description.length > config.limits.descriptionMax) {
+        throw new HttpError(400, 'VALIDATION', 'A descrição ficaria maior que o limite permitido.');
+      }
+    }
+
+    const f = input.fields;
+    await c.query(
+      `UPDATE items SET name = COALESCE($2, name), description = $3, category = COALESCE($4, category) WHERE id = $1`,
+      [a.item_id, f.name ?? null, description, f.category ?? null],
+    );
+
+    if (policy === 'ALL') {
+      if (input.photoKeys?.length) await replacePhotos(c, a.item_id, input.photoKeys);
+      const startsAt = f.startsAt ?? a.starts_at;
+      if (f.startsAt) {
+        const err = leadTimeError(startsAt, now);
+        if (err) throw new HttpError(400, 'VALIDATION', err);
+      }
+      const durationSec = f.durationSec ?? (a.original_ends_at.getTime() - a.starts_at.getTime()) / 1000;
+      const endsAt = new Date(startsAt.getTime() + durationSec * 1000);
+      await c.query(
+        `UPDATE auctions
+            SET start_price_cents = COALESCE($2, start_price_cents), starts_at = $3, original_ends_at = $4, ends_at = $4
+          WHERE id = $1`,
+        [id, f.startPriceCents ?? null, startsAt, endsAt],
+      );
+    }
+    await notifyAuction(c, id);
+  });
+}
+
+/**
+ * RF28: relistagem. Cria um NOVO leilão para o mesmo item a partir de um Encerrado sem lances
+ * ou Cancelado; o antigo continua registrado como está. Todos os campos podem mudar; se não
+ * vierem fotos novas, as do item são mantidas. O índice único parcial garante no banco que o item
+ * nunca tenha dois leilões Agendados/Em andamento, mesmo com duas relistagens simultâneas.
+ */
+export async function relistAuction(
+  id: string,
+  sellerId: string,
+  input: { fields: Partial<AuctionFields> & { startsAt: Date; durationSec: number }; photoKeys?: string[] },
+): Promise<string> {
+  try {
+    return await tx(async (c) => {
+      const { rows } = await c.query('SELECT * FROM auctions WHERE id = $1 FOR UPDATE', [id]);
+      const a = rows[0];
+      if (!a) throw new HttpError(404, 'NOT_FOUND', 'Leilão não encontrado.');
+      if (a.seller_id !== sellerId) throw new HttpError(403, 'NOT_OWNER', 'Só o comitente pode relistar o item.');
+      if (!canRelist(a)) {
+        throw new HttpError(409, 'CANNOT_RELIST', 'Só leilões Encerrados sem lances ou Cancelados podem ser relistados.');
+      }
+      const now = await dbNow(c);
+      const f = input.fields;
+      const err = leadTimeError(f.startsAt, now);
+      if (err) throw new HttpError(400, 'VALIDATION', err);
+
+      await c.query(
+        `UPDATE items SET name = COALESCE($2, name), description = COALESCE($3, description), category = COALESCE($4, category)
+          WHERE id = $1`,
+        [a.item_id, f.name ?? null, f.description ?? null, f.category ?? null],
+      );
+      if (input.photoKeys?.length) await replacePhotos(c, a.item_id, input.photoKeys);
+
+      const endsAt = new Date(f.startsAt.getTime() + f.durationSec * 1000);
+      const created = await c.query(
+        `INSERT INTO auctions (item_id, seller_id, start_price_cents, starts_at, original_ends_at, ends_at)
+         VALUES ($1,$2,$3,$4,$5,$5) RETURNING id`,
+        [a.item_id, sellerId, f.startPriceCents ?? a.start_price_cents, f.startsAt, endsAt],
+      );
+      const newId = created.rows[0].id as string;
+      await notifyAuction(c, newId);
+      return newId;
+    });
+  } catch (e: any) {
+    if (e?.code === '23505' && String(e?.constraint).includes('auctions_one_active_per_item')) {
+      throw new HttpError(409, 'ALREADY_ACTIVE', 'Este item já tem um leilão agendado ou em andamento.');
+    }
+    throw e;
+  }
 }
 
 export type BidReject =
