@@ -5,6 +5,9 @@ import { useSocket } from '../lib/socket';
 import { dateTime, money, STATUS_LABEL } from '../lib/format';
 import { AuctionCard } from '../components/AuctionCard';
 import { Countdown } from '../components/Countdown';
+import { Avatar } from '../components/Avatar';
+import { AccountPanel } from '../components/AccountPanel';
+import { useAuth } from '../lib/auth';
 
 const joinedAt = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
@@ -35,7 +38,10 @@ export function SellersPage() {
           {items.map((u) => (
             <li key={u.id}>
               <Link to={`/usuarios/${u.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
-                <span className="font-medium">{u.displayName}</span>
+                <span className="flex items-center gap-3 font-medium">
+                  <Avatar name={u.displayName} url={u.avatarUrl} size={32} />
+                  {u.displayName}
+                </span>
                 <span className="text-sm text-slate-500">{u.auctionCount} leilão(ões) · desde {joinedAt(u.createdAt)}</span>
               </Link>
             </li>
@@ -49,6 +55,7 @@ export function SellersPage() {
 // RF22: perfil público (sem e-mail, sem avaliações).
 export function ProfilePage() {
   const { id = '' } = useParams();
+  const { user } = useAuth();
   const [p, setP] = useState<PublicProfile | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -59,6 +66,7 @@ export function ProfilePage() {
   if (notFound) return <div className="card p-10 text-center">Usuário não encontrado.</div>;
   if (!p) return <p className="text-slate-500">Carregando…</p>;
 
+  const isMe = user?.id === p.id;
   const sections = [
     { title: 'Em andamento', items: p.auctions.live },
     { title: 'Agendados', items: p.auctions.scheduled },
@@ -67,15 +75,18 @@ export function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <div className="card flex items-center gap-4 p-5">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-100 text-xl font-bold text-brand-700">
-          {p.displayName.slice(0, 1).toUpperCase()}
+      {isMe && user ? (
+        <AccountPanel user={user} />
+      ) : (
+        <div className="card flex items-center gap-4 p-5">
+          <Avatar name={p.displayName} url={p.avatarUrl} size={56} />
+          <div>
+            <h1 className="text-xl font-bold">{p.displayName}</h1>
+            <p className="text-sm text-slate-500">Na plataforma desde {joinedAt(p.createdAt)}</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-bold">{p.displayName}</h1>
-          <p className="text-sm text-slate-500">Na plataforma desde {joinedAt(p.createdAt)}</p>
-        </div>
-      </div>
+      )}
+      {isMe && <h2 className="pt-2 text-xl font-bold">Meus leilões</h2>}
       {sections.map((s) => (
         <section key={s.title} className="space-y-3">
           <h2 className="text-lg font-semibold">{s.title} <span className="text-slate-400">({s.items.length})</span></h2>
