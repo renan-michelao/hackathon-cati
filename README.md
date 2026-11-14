@@ -1,6 +1,7 @@
-# Kernel Panic Leilões
+# FGR Leilões
 
 Plataforma de leilão online em tempo real, feita pela equipe **Kernel Panic** (Renan, Gustavo e Francini) no Hackathon Cati Jr.
+É uma simulação: nenhuma transação é real.
 
 **Sistema publicado:** http://200.18.99.113:8083
 

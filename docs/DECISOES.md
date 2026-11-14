@@ -305,3 +305,25 @@ Antes, a VM rodava provisoriamente com o SeaweedFS para contornar a falta de cre
 Também tem `parar`, `logs`, `status` e `verificar` (as 55 verificações automáticas).
 **Proteção:** se existir um banco de uma execução anterior mas o `.env` tiver sumido, o script **para** em vez de gerar uma senha nova, que não abriria o banco existente. Ele explica as duas saídas: restaurar o `.env` ou apagar o volume.
 **Verificado:** num clone limpo do repositório, `./rodar.sh` levou do zero ao sistema no ar em ~12 s (com as camadas do Docker já em cache) e `./rodar.sh verificar` passou nas 55 verificações. Também testamos a proteção do `.env` e as mensagens de "sem permissão no Docker" e "comando desconhecido".
+
+## D39 · Integração do novo design e refinamento
+**Contexto:** o time redesenhou a listagem, os cards, o cabeçalho e as telas de login e cadastro com o nome **FGR Leilões** (nome fictício escolhido pelo grupo). Integramos esse trabalho na `main` com as demais branches.
+**Escolha 1 — nada de dado inventado na tela.** Alguns elementos visuais mostravam números fixos no código como se fossem reais. Trocamos cada um por um dado verdadeiro ou o removemos:
+
+| Antes | Depois |
+|---|---|
+| Cabeçalho com "Crédito R$ 8.500 / 72 XP / Nível Comitente" para qualquer usuário | "Ver meu perfil" (o Bônus de pontuação e crédito não está implementado) |
+| Botão "Quero Vender" com habilitação fictícia (RF30) | Removido; "+ Anunciar" leva direto ao formulário (no Núcleo, todo usuário anuncia) |
+| "N participantes assistindo" no card (conta inventada) | Nome do comitente, com link para o perfil (RF22) |
+| "Fotos: 1/3", carrossel e favorito que não salvava | Removidos |
+| Abas com "(12)", "(5)", "(15)" fixos | Total real da aba selecionada, vindo da API |
+| "Horário de Brasília" | Removido (os horários são exibidos no fuso de quem vê, RF19) |
+| "Permanecer conectado", botão "?" e rodapé de copyright | Removidos; uma linha explica que é uma simulação |
+
+**Por quê:** a banca testa o sistema e pergunta sobre o código. Um número fixo apresentado como real é pior do que não mostrar o número, e o pitch já tem espaço para "o que ficou de fora".
+
+**Escolha 2 — filtro por comitente no servidor.** O filtro da Home filtrava só a página carregada (20 itens), então deixava de achar leilões nas outras páginas. Agora `GET /api/auctions?sellerName=` filtra no banco, sem diferenciar acentos, e funciona com a paginação.
+
+**Escolha 3 — um visual só.** A cor da marca (`brand-*`) passou a ser o índigo do design do time, e os componentes reutilizáveis (`card`, `btn-*`, `input`, `label`) ganharam os mesmos cantos arredondados. Assim a sala, os formulários, o perfil e "Minhas participações" combinam com a Home sem precisar reescrever cada tela. As telas de login, que usavam azul, também passaram para o índigo.
+
+**Escolha 4 — navegação completa, inclusive no celular.** O menu tinha perdido "Leilões" e "Comitentes" e ficava escondido no celular. Agora tem os quatro itens e, no celular, aparece numa linha com rolagem lateral; o cabeçalho caiu de 175 px para cerca de 115 px.
