@@ -23,10 +23,12 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      # 127.0.0.1 e não localhost: no Alpine, localhost resolve para ::1 (IPv6) primeiro
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 10s
 
   worker:
     build: ./api
@@ -53,7 +55,8 @@ services:
     image: chrislusf/seaweedfs:latest
     profiles: ["local"]
     restart: unless-stopped
-    command: ["server", "-s3", "-ip.bind=0.0.0.0", "-dir=/data"]
+    # volumes de 100 MB: o padrão (30 GB por volume) falha em discos com pouco espaço livre
+    command: ["server", "-s3", "-ip.bind=0.0.0.0", "-dir=/data", "-master.volumeSizeLimitMB=100", "-volume.max=20"]
     volumes:
       - s3data:/data
 
