@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
 import { api, type AppConfig, type AuctionSummary, type Paged } from '../lib/api';
 import { syncServerClock } from '../lib/clock';
 import { AuctionCard } from '../components/AuctionCard';
-import { useAuth } from '../lib/auth';
+import { useSocket } from '../lib/socket';
 
 const FILTERS = [
   { value: 'LIVE,SCHEDULED', label: 'Ativos' },
@@ -14,7 +13,7 @@ const FILTERS = [
 
 // RF20: listagem pública de leilões (com filtros que adiantam o RF21).
 export function Home() {
-  const { user } = useAuth();
+  const socket = useSocket();
   const [data, setData] = useState<Paged<AuctionSummary> | null>(null);
   const [cfg, setCfg] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState(FILTERS[0].value);
@@ -43,19 +42,20 @@ export function Home() {
   }, [load]);
 
   // Atualiza a lista quando algum leilão muda (abre, fecha, recebe lance).
+  // Visitantes não têm conexão em tempo real (exige login): recarregam a cada 10 s.
   useEffect(() => {
-    if (!user) {
+    if (!socket) {
       const t = setInterval(() => void load(), 10_000);
       return () => clearInterval(t);
     }
-    const s = io({ path: '/socket.io' });
     let pending: ReturnType<typeof setTimeout> | null = null;
-    s.on('listing:changed', () => {
+    const onChange = () => {
       if (pending) return;
       pending = setTimeout(() => { pending = null; void load(); }, 500);
-    });
-    return () => { s.disconnect(); if (pending) clearTimeout(pending); };
-  }, [user, load]);
+    };
+    socket.on('listing:changed', onChange);
+    return () => { socket.off('listing:changed', onChange); if (pending) clearTimeout(pending); };
+  }, [socket, load]);
 
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 

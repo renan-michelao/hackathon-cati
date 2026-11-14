@@ -16,11 +16,13 @@ export function Layout() {
           </Link>
           <nav className="flex flex-1 flex-wrap items-center gap-1">
             <NavLink to="/" end className={link}>Leilões</NavLink>
+            <NavLink to="/comitentes" className={link}>Comitentes</NavLink>
+            {user && <NavLink to="/minhas-participacoes" className={link}>Minhas participações</NavLink>}
             {user && <NavLink to="/leiloes/novo" className={link}>Anunciar</NavLink>}
           </nav>
           {user ? (
             <div className="flex items-center gap-3 text-sm">
-              <span className="text-slate-600">Olá, <strong>{user.displayName}</strong></span>
+              <Link to={`/usuarios/${user.id}`} className="text-slate-600 hover:text-slate-900">Olá, <strong>{user.displayName}</strong></Link>
               <button className="btn-secondary" onClick={async () => { await logout(); nav('/'); }}>Sair</button>
             </div>
           ) : (
