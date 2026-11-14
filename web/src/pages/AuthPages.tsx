@@ -14,7 +14,6 @@ export function LoginPage() {
   const to = useRedirect();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [showDemoUsers, setShowDemoUsers] = useState(false);
@@ -80,7 +79,7 @@ export function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
               />
             </div>
 
@@ -93,7 +92,7 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
               />
             </div>
 
@@ -107,30 +106,13 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={busy}
-              className="w-full rounded-full bg-blue-600 py-3 px-4 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+              className="w-full rounded-full bg-brand-600 py-3 px-4 text-sm font-semibold text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
             >
               {busy ? 'Entrando…' : 'Entrar'}
             </button>
 
-            {/* Checkbox Permanecer conectado */}
-            <div className="flex items-center gap-2 pt-1 text-xs sm:text-sm text-slate-700 select-none">
-              <input
-                type="checkbox"
-                id="remember"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-              />
-              <label htmlFor="remember" className="cursor-pointer font-medium">
-                Permanecer conectado
-              </label>
-              <span
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 cursor-help text-xs"
-                title="Sua sessão será preservada neste navegador."
-              >
-                ⓘ
-              </span>
-            </div>
+            {/* Sessão: dura 2h sem uso e se renova sozinha enquanto a pessoa usa o site (RF02) */}
+            <p className="text-center text-xs text-slate-500">A sessão se renova enquanto você usa o site.</p>
           </form>
 
           {/* Atalho Contas de Demonstração */}
@@ -181,22 +163,8 @@ export function LoginPage() {
 
       {/* Rodapé da Página */}
       <footer className="py-6 px-4 text-center text-[10px] sm:text-[11px] text-slate-400 leading-relaxed max-w-2xl mx-auto">
-        Copyright © 1995-2026 FGR Leilões Inc. Todos os direitos reservados.{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">Contrato do Usuário</span>,{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">Privacidade</span>,{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">Termos de Uso de Pagamentos</span>,{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">Cookies</span> e{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">AdChoice</span>.
+        FGR Leilões · simulação de leilão online feita pela equipe Kernel Panic no Hackathon Cati Jr. Nenhuma transação é real.
       </footer>
-
-      {/* Botão Flutuante de Ajuda (?) */}
-      <button
-        type="button"
-        title="Ajuda"
-        className="fixed bottom-6 right-6 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50 transition font-bold text-sm cursor-pointer"
-      >
-        ?
-      </button>
     </div>
   );
 }
@@ -262,7 +230,7 @@ export function RegisterPage() {
                 maxLength={60}
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
               />
             </div>
 
@@ -275,7 +243,7 @@ export function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
               />
             </div>
 
@@ -289,7 +257,7 @@ export function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
               />
             </div>
 
@@ -302,7 +270,7 @@ export function RegisterPage() {
             <button
               type="submit"
               disabled={busy}
-              className="w-full rounded-full bg-blue-600 py-3 px-4 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+              className="w-full rounded-full bg-brand-600 py-3 px-4 text-sm font-semibold text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
             >
               {busy ? 'Criando…' : 'Criar conta'}
             </button>
@@ -311,21 +279,9 @@ export function RegisterPage() {
       </main>
 
       <footer className="py-6 px-4 text-center text-[10px] sm:text-[11px] text-slate-400 leading-relaxed max-w-2xl mx-auto">
-        Copyright © 1995-2026 FGR Leilões Inc. Todos os direitos reservados.{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">Contrato do Usuário</span>,{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">Privacidade</span>,{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">Termos de Uso de Pagamentos</span>,{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">Cookies</span> e{' '}
-        <span className="underline cursor-pointer hover:text-slate-600">AdChoice</span>.
+        FGR Leilões · simulação de leilão online feita pela equipe Kernel Panic no Hackathon Cati Jr. Nenhuma transação é real.
       </footer>
 
-      <button
-        type="button"
-        title="Ajuda"
-        className="fixed bottom-6 right-6 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50 transition font-bold text-sm cursor-pointer"
-      >
-        ?
-      </button>
     </div>
   );
 }
