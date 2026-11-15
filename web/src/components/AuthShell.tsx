@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { GavelIcon } from './GavelIcon';
 
 /** Moldura das telas de conta (mesmo visual do login): barra com a marca, card central e rodapé. */
 export function AuthShell({ title, children }: { title: string; children: ReactNode }) {
@@ -7,7 +8,7 @@ export function AuthShell({ title, children }: { title: string; children: ReactN
     <div className="flex min-h-screen flex-col justify-between bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200/90 bg-white px-6 py-3.5 sm:px-12">
         <Link to="/" className="inline-flex items-center gap-2.5 text-lg font-bold text-slate-900 hover:opacity-90">
-          <span className="text-xl">🔨</span>
+          <GavelIcon className="h-6 w-6 text-slate-900" />
           <span className="tracking-tight">FGR Leilões</span>
         </Link>
       </header>

@@ -16,7 +16,9 @@ services:
       retries: 20
 
   api:
-    build: ./api
+    build:
+      context: ./api
+      network: host
     restart: unless-stopped
     env_file: .env
     depends_on:
@@ -34,7 +36,9 @@ services:
       - fotos:/data/fotos
 
   worker:
-    build: ./api
+    build:
+      context: ./api
+      network: host
     restart: unless-stopped
     env_file: .env
     command: ["node", "dist/worker.js"]
@@ -43,7 +47,9 @@ services:
         condition: service_healthy
 
   web:
-    build: ./web
+    build:
+      context: ./web
+      network: host
     restart: unless-stopped
     ports:
       - "8080:8080"

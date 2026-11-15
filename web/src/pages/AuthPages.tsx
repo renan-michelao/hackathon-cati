@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
+import { GavelIcon } from '../components/GavelIcon';
 
 function useRedirect() {
   const loc = useLocation();
@@ -43,7 +44,7 @@ export function LoginPage() {
       {/* Topo Limpo com Logo FGR Leilões */}
       <header className="border-b border-slate-200/90 bg-white py-3.5 px-6 sm:px-12">
         <Link to="/" className="inline-flex items-center gap-2.5 text-lg font-bold text-slate-900 hover:opacity-90">
-          <span className="text-xl">🔨</span>
+          <GavelIcon className="h-6 w-6 text-slate-900" />
           <span className="tracking-tight">FGR Leilões</span>
         </Link>
       </header>
@@ -200,7 +201,7 @@ export function RegisterPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-900 relative">
       <header className="border-b border-slate-200/90 bg-white py-3.5 px-6 sm:px-12">
         <Link to="/" className="inline-flex items-center gap-2.5 text-lg font-bold text-slate-900 hover:opacity-90">
-          <span className="text-xl">🔨</span>
+          <GavelIcon className="h-6 w-6 text-slate-900" />
           <span className="tracking-tight">FGR Leilões</span>
         </Link>
       </header>
